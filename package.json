@@ -1,0 +1,33 @@
+{
+  "name": "rubiks-electron",
+  "version": "1.0.0",
+  "description": "Playing around with building an electron application to play with a Rubik's cube digitally.",
+  "main": "./dist/renderer/App.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RobertPollum/Rubiks-Electron.git"
+  },
+  "keywords": [],
+  "author": {
+    "name": "Robert Pollum",
+    "email": "robertmpollum@needanemail.com"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RobertPollum/Rubiks-Electron/issues"
+  },
+  "homepage": "https://github.com/RobertPollum/Rubiks-Electron#readme",
+  "devDependencies": {
+    "@types/electron": "^1.4.38",
+    "electron": "^37.4.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "tsc": "^2.0.4"
+  }
+}
