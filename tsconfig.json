@@ -9,7 +9,7 @@
     // See also https://aka.ms/tsconfig/module
     "module": "commonjs",
     // "moduleResolution": "node",
-    "target": "es5",
+    // "target": "es5",
     "types": [],
     // For nodejs:
     // "lib": ["esnext"],
@@ -34,7 +34,7 @@
     "noUnusedParameters": true,
     // "noFallthroughCasesInSwitch": true,
     // "noPropertyAccessFromIndexSignature": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
 
     // Recommended Options
     "strict": true,
@@ -45,9 +45,13 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
     "removeComments": false,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    }
   }, 
   "include": [
-        "./**/*"
+        "src/**/*"
     ],
   "exclude": [ 
     "node_modulers", 

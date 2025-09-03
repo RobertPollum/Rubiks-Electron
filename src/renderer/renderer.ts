@@ -52,3 +52,7 @@ export default class Renderer {
     }
 
 }
+
+let renderer = new Renderer(); //create instance so the three js cube render starts
+
+module.exports = {Renderer};

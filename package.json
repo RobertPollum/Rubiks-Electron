@@ -6,16 +6,23 @@
   "scripts": {
     "start": "electron .",
     "build": "tsc",
+    "watch": "tsc -w",
+    "lint": "eslint -c .eslintrc --ext .ts ./src",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RobertPollum/Rubiks-Electron.git"
   },
-  "keywords": [],
+  "keywords": [
+    "electron",
+    "typescript",
+    "threejs",
+    "rubik's cube"
+  ],
   "author": {
     "name": "Robert Pollum",
-    "email": "robertmpollum@needanemail.com"
+    "email": "underpenalty@gmail.com"
   },
   "license": "ISC",
   "bugs": {
@@ -25,7 +32,10 @@
   "devDependencies": {
     "@types/electron": "^1.4.38",
     "@types/three": "^0.179.0",
+    "@typescript-eslint/eslint-plugin": "^8.42.0",
+    "@typescript-eslint/parser": "^8.42.0",
     "electron": "^37.4.0",
+    "eslint": "^9.34.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {

@@ -1,4 +1,6 @@
 import { app, BrowserWindow } from 'electron';
-import Main from '../main/main';
+import {Main} from '../main/main';
 
 Main.main(app, BrowserWindow);
+
+module.exports = {};

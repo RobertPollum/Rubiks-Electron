@@ -4,4 +4,4 @@
 //   // Expose safe APIs
 // });
 
-console.log("preload loaded")
+console.log("preload loaded");
