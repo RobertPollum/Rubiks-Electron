@@ -18,7 +18,9 @@
     "electron",
     "typescript",
     "threejs",
-    "rubik's cube"
+    "Rubik",
+    "Rubiks",
+    "cube"
   ],
   "author": {
     "name": "Robert Pollum",
