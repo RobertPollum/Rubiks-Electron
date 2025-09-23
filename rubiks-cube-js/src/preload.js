@@ -4,6 +4,7 @@
 const { contextBridge } = require('electron')
 
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { generateCube3dArray } from './cube';
 
@@ -72,11 +73,11 @@ scene.add(light)
 // scene.add(cube2);
 // scene.add(cube3);
 // scene.add(cube4);
-// scene.add(cube5);
-// scene.add(cube6);
-// scene.add(cube7);
-// scene.add(cube8);
-// scene.add(cube9);
+// // scene.add(cube5);
+// // scene.add(cube6);
+// // scene.add(cube7);
+// // scene.add(cube8);
+// // scene.add(cube9);
 let ThreeDCubeArray = generateCube3dArray(3, scene);
 const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000);
 camera.position.set(0, 3, 12);
@@ -90,13 +91,255 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(window.devicePixelRatio);
 
+// Initialize OrbitControls for mouse/touch camera orbiting
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.rotateSpeed = 0.6;
+controls.minDistance = 5;
+controls.maxDistance = 30;
+controls.target.set(0, 0, 0);
+controls.update();
+
+// Rubik's Cube rotation state management
+let isRotating = false;
+let rotationQueue = [];
+let currentRotation = null;
+const rotationSpeed = 0.1;
+const rotationAngle = Math.PI / 2; // 90 degrees
+
+// Create groups for each face to enable rotation
+const faceGroups = {
+    R: new THREE.Group(), // Right face
+    L: new THREE.Group(), // Left face
+    U: new THREE.Group(), // Up face
+    D: new THREE.Group(), // Down face
+    F: new THREE.Group(), // Front face
+    B: new THREE.Group()  // Back face
+};
+
+// Add face groups to scene
+Object.values(faceGroups).forEach(group => scene.add(group));
+
+// Function to get cubes belonging to a specific face
+function getCubesToRotate(face) {
+    const cubes = [];
+    
+    switch(face) {
+        case 'R': // Right face (x = 3)
+            for(let y = 0; y < 3; y++) {
+                for(let z = 0; z < 3; z++) {
+                    cubes.push(ThreeDCubeArray[z][y][2]);
+                }
+            }
+            break;
+        case 'L': // Left face (x = -3)
+            for(let y = 0; y < 3; y++) {
+                for(let z = 0; z < 3; z++) {
+                    cubes.push(ThreeDCubeArray[z][y][0]);
+                }
+            }
+            break;
+        case 'U': // Up face (y = 3)
+            for(let x = 0; x < 3; x++) {
+                for(let z = 0; z < 3; z++) {
+                    cubes.push(ThreeDCubeArray[z][2][x]);
+                }
+            }
+            break;
+        case 'D': // Down face (y = -3)
+            for(let x = 0; x < 3; x++) {
+                for(let z = 0; z < 3; z++) {
+                    cubes.push(ThreeDCubeArray[z][0][x]);
+                }
+            }
+            break;
+        case 'F': // Front face (z = 3)
+            for(let x = 0; x < 3; x++) {
+                for(let y = 0; y < 3; y++) {
+                    cubes.push(ThreeDCubeArray[2][y][x]);
+                }
+            }
+            break;
+        case 'B': // Back face (z = -3)
+            for(let x = 0; x < 3; x++) {
+                for(let y = 0; y < 3; y++) {
+                    cubes.push(ThreeDCubeArray[0][y][x]);
+                }
+            }
+            break;
+    }
+    
+    return cubes;
+}
+
+// Function to start a face rotation
+function rotateFace(face, clockwise = true) {
+    if (isRotating) {
+        rotationQueue.push({ face, clockwise });
+        return;
+    }
+    
+    isRotating = true;
+    const cubes = getCubesToRotate(face);
+    const group = faceGroups[face];
+    
+    // Temporarily add cubes to the rotation group
+    cubes.forEach(cube => {
+        // Store original parent and position
+        cube.userData.originalParent = cube.parent;
+        cube.userData.originalPosition = cube.position.clone();
+        cube.userData.originalRotation = cube.rotation.clone();
+        
+        // Convert position to group's local space
+        const worldPosition = new THREE.Vector3();
+        cube.getWorldPosition(worldPosition);
+        scene.remove(cube);
+        group.add(cube);
+        group.worldToLocal(worldPosition);
+        cube.position.copy(worldPosition);
+    });
+    
+    currentRotation = {
+        group: group,
+        cubes: cubes,
+        face: face,
+        targetAngle: clockwise ? rotationAngle : -rotationAngle,
+        currentAngle: 0,
+        axis: getRotationAxis(face)
+    };
+}
+
+// Function to get rotation axis for each face
+function getRotationAxis(face) {
+    switch(face) {
+        case 'R':
+        case 'L':
+            return new THREE.Vector3(1, 0, 0);
+        case 'U':
+        case 'D':
+            return new THREE.Vector3(0, 1, 0);
+        case 'F':
+        case 'B':
+            return new THREE.Vector3(0, 0, 1);
+        default:
+            return new THREE.Vector3(0, 1, 0);
+    }
+}
+
+// Function to update cube positions in the array after rotation
+function updateCubeArray(face, clockwise) {
+    // This would update the ThreeDCubeArray to reflect the new positions
+    // Implementation depends on how you want to track the cube state
+    // For now, we'll keep it simple and just update visual positions
+}
+
+// Function to show visual feedback
+function showRotationFeedback(face, clockwise) {
+    const infoElement = document.getElementById('info');
+    if (infoElement) {
+        const direction = clockwise ? 'clockwise' : 'counter-clockwise';
+        infoElement.textContent = `Rotating ${face} face ${direction}...`;
+        infoElement.style.color = '#4CAF50';
+        infoElement.style.fontWeight = 'bold';
+        
+        // Clear feedback after animation
+        setTimeout(() => {
+            infoElement.textContent = 'Ready for next move';
+            infoElement.style.color = '#333';
+        }, 1000);
+    }
+}
+
+// Keyboard controls for cube rotations
+document.addEventListener('keydown', (event) => {
+    const key = event.key.toLowerCase();
+    const clockwise = !event.shiftKey;
+    
+    switch(key) {
+        case 'r':
+            rotateFace('R', clockwise);
+            showRotationFeedback('Right', clockwise);
+            break;
+        case 'l':
+            rotateFace('L', clockwise);
+            showRotationFeedback('Left', clockwise);
+            break;
+        case 'u':
+            rotateFace('U', clockwise);
+            showRotationFeedback('Up', clockwise);
+            break;
+        case 'd':
+            rotateFace('D', clockwise);
+            showRotationFeedback('Down', clockwise);
+            break;
+        case 'f':
+            rotateFace('F', clockwise);
+            showRotationFeedback('Front', clockwise);
+            break;
+        case 'b':
+            rotateFace('B', clockwise);
+            showRotationFeedback('Back', clockwise);
+            break;
+    }
+});
+
 renderer.setAnimationLoop(render)
 
 function render() {
-    // cube0.rotation.y += 0.01;
-    // cube1.rotation.x += 0.001;
-    // cube.rotation.x += 0.01;
-    // cube.up += 0.01;
+    // Handle cube face rotations
+    if (currentRotation) {
+        const { group, cubes, targetAngle, axis } = currentRotation;
+        
+        // Calculate rotation step
+        const rotationStep = Math.sign(targetAngle) * rotationSpeed;
+        currentRotation.currentAngle += rotationStep;
+        
+        // Apply rotation
+        group.rotateOnAxis(axis, rotationStep);
+        
+        // Check if rotation is complete
+        if (Math.abs(currentRotation.currentAngle) >= Math.abs(targetAngle)) {
+            // Snap to exact angle
+            const remainingAngle = targetAngle - currentRotation.currentAngle;
+            group.rotateOnAxis(axis, remainingAngle);
+            
+            // Move cubes back to scene and update positions
+            cubes.forEach(cube => {
+                // Get world position and rotation
+                const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                cube.getWorldPosition(worldPosition);
+                cube.getWorldQuaternion(worldQuaternion);
+                
+                // Remove from group and add back to scene
+                group.remove(cube);
+                scene.add(cube);
+                
+                // Apply world transform
+                cube.position.copy(worldPosition);
+                cube.quaternion.copy(worldQuaternion);
+            });
+            
+            // Reset group rotation
+            group.rotation.set(0, 0, 0);
+            
+            // Update cube array positions
+            updateCubeArray(currentRotation.face, currentRotation.targetAngle > 0);
+            
+            // Reset rotation state
+            currentRotation = null;
+            isRotating = false;
+            
+            // Process next rotation in queue
+            if (rotationQueue.length > 0) {
+                const nextRotation = rotationQueue.shift();
+                rotateFace(nextRotation.face, nextRotation.clockwise);
+            }
+        }
+    }
+    // Update camera controls (damped orbiting)
+    controls.update();
     renderer.render(scene, camera)
 }
 
@@ -110,6 +353,8 @@ window.addEventListener('resize', () => {
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(window.devicePixelRatio)
 
+    // Keep controls in sync after resize
+    controls.update();
 })
 
 contextBridge.exposeInMainWorld('versions', {
