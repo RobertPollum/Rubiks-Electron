@@ -79,6 +79,205 @@ scene.add(light)
 // // scene.add(cube8);
 // // scene.add(cube9);
 let ThreeDCubeArray = generateCube3dArray(3, scene);
+
+// Matrix tracking system for individual cubes
+class CubeTracker {
+    constructor() {
+        this.cubePositions = new Map(); // Maps cube ID to logical position [x, y, z]
+        this.positionToCube = new Map(); // Maps position string to cube ID
+        this.cubeIdCounter = 0;
+    }
+
+    // Initialize tracking for all cubes
+    initializeCubeTracking(cubeArray) {
+        for (let z = 0; z < 3; z++) {
+            for (let y = 0; y < 3; y++) {
+                for (let x = 0; x < 3; x++) {
+                    const cube = cubeArray[z][y][x];
+                    const cubeId = this.cubeIdCounter++;
+                    const position = [x, y, z];
+                    
+                    // Store cube ID in userData for reference
+                    cube.userData.cubeId = cubeId;
+                    cube.userData.logicalPosition = [...position];
+                    
+                    // Track positions
+                    this.cubePositions.set(cubeId, position);
+                    this.positionToCube.set(this.positionKey(position), cubeId);
+                }
+            }
+        }
+    }
+
+    // Generate position key for mapping
+    positionKey(position) {
+        return `${position[0]},${position[1]},${position[2]}`;
+    }
+
+    // Get cube at logical position
+    getCubeAtPosition(x, y, z) {
+        const key = this.positionKey([x, y, z]);
+        const cubeId = this.positionToCube.get(key);
+        if (cubeId !== undefined) {
+            // Find the actual cube object
+            for (let zi = 0; zi < 3; zi++) {
+                for (let yi = 0; yi < 3; yi++) {
+                    for (let xi = 0; xi < 3; xi++) {
+                        const cube = ThreeDCubeArray[zi][yi][xi];
+                        if (cube.userData.cubeId === cubeId) {
+                            return cube;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // Update cube position after rotation
+    updateCubePosition(cubeId, newPosition) {
+        const oldPosition = this.cubePositions.get(cubeId);
+        if (oldPosition) {
+            // Remove old position mapping
+            this.positionToCube.delete(this.positionKey(oldPosition));
+        }
+        
+        // Set new position
+        this.cubePositions.set(cubeId, newPosition);
+        this.positionToCube.set(this.positionKey(newPosition), cubeId);
+    }
+}
+
+// Matrix transformation utilities
+class MatrixTransformations {
+    // Create rotation matrix for 90-degree rotations around each axis
+    static getRotationMatrix(axis, clockwise = true) {
+        const angle = clockwise ? -Math.PI / 2 : Math.PI / 2;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        
+        switch (axis) {
+            case 'x': // Right/Left face rotations
+                return new THREE.Matrix3().set(
+                    1, 0, 0,
+                    0, cos, -sin,
+                    0, sin, cos
+                );
+            case 'y': // Up/Down face rotations
+                return new THREE.Matrix3().set(
+                    cos, 0, sin,
+                    0, 1, 0,
+                    -sin, 0, cos
+                );
+            case 'z': // Front/Back face rotations
+                return new THREE.Matrix3().set(
+                    cos, -sin, 0,
+                    sin, cos, 0,
+                    0, 0, 1
+                );
+            default:
+                return new THREE.Matrix3().identity();
+        }
+    }
+
+    // Apply matrix transformation to a position vector
+    static transformPosition(position, matrix, center = [1, 1, 1]) {
+        // Convert to center-relative coordinates
+        const relativePos = [
+            position[0] - center[0],
+            position[1] - center[1],
+            position[2] - center[2]
+        ];
+        
+        // Apply matrix transformation
+        const vector = new THREE.Vector3(relativePos[0], relativePos[1], relativePos[2]);
+        vector.applyMatrix3(matrix);
+        
+        // Convert back to absolute coordinates and round to handle floating point precision
+        return [
+            Math.round(vector.x + center[0]),
+            Math.round(vector.y + center[1]),
+            Math.round(vector.z + center[2])
+        ];
+    }
+
+    // Get positions of cubes that belong to a specific face
+    static getFacePositions(face) {
+        const positions = [];
+        
+        switch(face) {
+            case 'R': // Right face (x = 2)
+                for(let y = 0; y < 3; y++) {
+                    for(let z = 0; z < 3; z++) {
+                        positions.push([2, y, z]);
+                    }
+                }
+                break;
+            case 'L': // Left face (x = 0)
+                for(let y = 0; y < 3; y++) {
+                    for(let z = 0; z < 3; z++) {
+                        positions.push([0, y, z]);
+                    }
+                }
+                break;
+            case 'U': // Up face (y = 2)
+                for(let x = 0; x < 3; x++) {
+                    for(let z = 0; z < 3; z++) {
+                        positions.push([x, 2, z]);
+                    }
+                }
+                break;
+            case 'D': // Down face (y = 0)
+                for(let x = 0; x < 3; x++) {
+                    for(let z = 0; z < 3; z++) {
+                        positions.push([x, 0, z]);
+                    }
+                }
+                break;
+            case 'F': // Front face (z = 2)
+                for(let x = 0; x < 3; x++) {
+                    for(let y = 0; y < 3; y++) {
+                        positions.push([x, y, 2]);
+                    }
+                }
+                break;
+            case 'B': // Back face (z = 0)
+                for(let x = 0; x < 3; x++) {
+                    for(let y = 0; y < 3; y++) {
+                        positions.push([x, y, 0]);
+                    }
+                }
+                break;
+        }
+        
+        return positions;
+    }
+
+    // Get rotation axis for face
+    static getRotationAxis(face) {
+        switch(face) {
+            case 'R':
+            case 'L':
+                return 'x';
+            case 'U':
+            case 'D':
+                return 'y';
+            case 'F':
+            case 'B':
+                return 'z';
+            default:
+                return 'y';
+        }
+    }
+}
+
+// Initialize the cube tracker
+const cubeTracker = new CubeTracker();
+
+// Initialize cube tracking after the 3D array is created
+cubeTracker.initializeCubeTracking(ThreeDCubeArray);
+console.log('Cube tracking system initialized with', cubeTracker.cubePositions.size, 'cubes');
+
 const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000);
 camera.position.set(0, 3, 12);
 camera.lookAt(new THREE.Vector3(0, 0, 0))
@@ -112,52 +311,17 @@ const rotationAngle = Math.PI / 2; // 90 degrees
 // Function to get cubes belonging to a specific face
 function getCubesToRotate(face) {
     const cubes = [];
-    
-    switch(face) {
-        case 'R': // Right face (x = 3)
-            for(let y = 0; y < 3; y++) {
-                for(let z = 0; z < 3; z++) {
-                    cubes.push(ThreeDCubeArray[z][y][2]);
-                }
-            }
-            break;
-        case 'L': // Left face (x = -3)
-            for(let y = 0; y < 3; y++) {
-                for(let z = 0; z < 3; z++) {
-                    cubes.push(ThreeDCubeArray[z][y][0]);
-                }
-            }
-            break;
-        case 'U': // Up face (y = 3)
-            for(let x = 0; x < 3; x++) {
-                for(let z = 0; z < 3; z++) {
-                    cubes.push(ThreeDCubeArray[z][2][x]);
-                }
-            }
-            break;
-        case 'D': // Down face (y = -3)
-            for(let x = 0; x < 3; x++) {
-                for(let z = 0; z < 3; z++) {
-                    cubes.push(ThreeDCubeArray[z][0][x]);
-                }
-            }
-            break;
-        case 'F': // Front face (z = 3)
-            for(let x = 0; x < 3; x++) {
-                for(let y = 0; y < 3; y++) {
-                    cubes.push(ThreeDCubeArray[2][y][x]);
-                }
-            }
-            break;
-        case 'B': // Back face (z = -3)
-            for(let x = 0; x < 3; x++) {
-                for(let y = 0; y < 3; y++) {
-                    cubes.push(ThreeDCubeArray[0][y][x]);
-                }
-            }
-            break;
-    }
-    
+    const facePositions = MatrixTransformations.getFacePositions(face);
+
+    facePositions.forEach(position => {
+        const cube = cubeTracker.getCubeAtPosition(position[0], position[1], position[2]);
+        if (cube) {
+            cubes.push(cube);
+        } else {
+            console.warn(`No cube found at logical position ${position} for face ${face}`);
+        }
+    });
+
     return cubes;
 }
 
@@ -216,13 +380,166 @@ function getRotationAxis(face) {
     }
 }
 
-//TODO update tracking based on rotation input, then update the grouping of the regroup the cubes visually based on tracking to let the controls work correctly
-// Function to update cube positions in the array after rotation
+// Function to update cube positions in the array after rotation using matrix transformations
 function updateCubeArray(face, clockwise) {
-    // This would update the ThreeDCubeArray to reflect the new positions
-    // Implementation depends on how you want to track the cube state
-    // For now, we'll keep it simple and just update visual positions
+    console.log(`Updating cube array for ${face} face, clockwise: ${clockwise}`);
+    
+    // Get the rotation axis and matrix for this face rotation
+    const axis = MatrixTransformations.getRotationAxis(face);
+    const rotationMatrix = MatrixTransformations.getRotationMatrix(axis, clockwise);
+    
+    // Get all positions that belong to this face
+    const facePositions = MatrixTransformations.getFacePositions(face);
+    
+    // Store the cubes and their new positions
+    const cubesToMove = [];
+    const newPositions = [];
+    
+    // Calculate new positions using matrix transformation
+    facePositions.forEach(position => {
+        const cube = cubeTracker.getCubeAtPosition(position[0], position[1], position[2]);
+        if (cube) {
+            // Transform the logical position using the rotation matrix
+            const newPosition = MatrixTransformations.transformPosition(position, rotationMatrix);
+            
+            // Ensure the new position is within bounds [0,2] for each axis
+            newPosition[0] = Math.max(0, Math.min(2, newPosition[0]));
+            newPosition[1] = Math.max(0, Math.min(2, newPosition[1]));
+            newPosition[2] = Math.max(0, Math.min(2, newPosition[2]));
+            
+            cubesToMove.push(cube);
+            newPositions.push(newPosition);
+            
+            console.log(`Cube ${cube.userData.cubeId}: ${position} -> ${newPosition}`);
+        }
+    });
+    
+    // Update the tracking system with new positions
+    cubesToMove.forEach((cube, index) => {
+        const newPosition = newPositions[index];
+        
+        // Update cube tracker
+        cubeTracker.updateCubePosition(cube.userData.cubeId, newPosition);
+        
+        // Update cube's logical position
+        cube.userData.logicalPosition = [...newPosition];
+    });
+    
+    // Rebuild the ThreeDCubeArray based on new logical positions
+    rebuildCubeArray();
+    
+    console.log('Cube array updated successfully');
 }
+
+// Function to rebuild the 3D cube array based on current logical positions
+function rebuildCubeArray() {
+    // Create a new 3D array structure
+    const newArray = Array(3).fill(null).map(() => 
+        Array(3).fill(null).map(() => 
+            Array(3).fill(null)
+        )
+    );
+    
+    // Place each cube in its new logical position
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = cubeTracker.getCubeAtPosition(x, y, z);
+                if (cube) {
+                    newArray[z][y][x] = cube;
+                } else {
+                    console.warn(`No cube found at position [${x}, ${y}, ${z}]`);
+                }
+            }
+        }
+    }
+    
+    // Replace the global array
+    ThreeDCubeArray = newArray;
+    
+    // Validate the rebuild
+    validateCubeArray();
+}
+
+// Function to validate that all cubes are properly tracked
+function validateCubeArray() {
+    let cubeCount = 0;
+    let missingCubes = 0;
+    
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                if (ThreeDCubeArray[z][y][x]) {
+                    cubeCount++;
+                    const cube = ThreeDCubeArray[z][y][x];
+                    const logicalPos = cube.userData.logicalPosition;
+                    
+                    // Verify logical position matches array position
+                    if (logicalPos[0] !== x || logicalPos[1] !== y || logicalPos[2] !== z) {
+                        console.warn(`Position mismatch for cube ${cube.userData.cubeId}: 
+                            Array position [${x}, ${y}, ${z}] vs Logical position [${logicalPos[0]}, ${logicalPos[1]}, ${logicalPos[2]}]`);
+                    }
+                } else {
+                    missingCubes++;
+                    console.warn(`Missing cube at array position [${x}, ${y}, ${z}]`);
+                }
+            }
+        }
+    }
+    
+    console.log(`Cube validation: ${cubeCount} cubes found, ${missingCubes} missing cubes`);
+}
+
+// Debug function to print current cube positions
+function debugCubePositions() {
+    console.log('=== Current Cube Positions ===');
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube) {
+                    const logicalPos = cube.userData.logicalPosition;
+                    const worldPos = cube.position;
+                    console.log(`Cube ${cube.userData.cubeId}: Array[${z}][${y}][${x}], Logical[${logicalPos[0]}, ${logicalPos[1]}, ${logicalPos[2]}], World(${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}, ${worldPos.z.toFixed(1)})`);
+                }
+            }
+        }
+    }
+    console.log('=== End Cube Positions ===');
+}
+
+// Function to log the cube state after a rotation is complete
+function logCubeStateAfterRotation() {
+    console.log('Rotation finished. Current cube state:\n' + getCubeStateString());
+}
+
+// Function to get cube state as a string (useful for debugging)
+function getCubeStateString() {
+    let state = '';
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube) {
+                    state += cube.userData.cubeId.toString().padStart(2, '0') + ' ';
+                } else {
+                    state += '-- ';
+                }
+            }
+            state += '| ';
+        }
+        state += '\n';
+    }
+    return state;
+}
+
+// Add keyboard shortcut for debugging (press 'p' to print positions)
+document.addEventListener('keydown', (event) => {
+    if (event.key.toLowerCase() === 'p' && !event.shiftKey) {
+        debugCubePositions();
+        console.log('Current cube state:\n' + getCubeStateString());
+    }
+});
 
 // Function to show visual feedback
 function showRotationFeedback(face, clockwise) {
@@ -316,6 +633,9 @@ function render() {
             
             // Update cube array positions
             updateCubeArray(currentRotation.face, currentRotation.targetAngle > 0);
+
+            // Log the cube state for debugging
+            logCubeStateAfterRotation();
             
             // Reset rotation state
             currentRotation = null;
@@ -357,3 +677,5 @@ contextBridge.exposeInMainWorld('versions', {
 window.addEventListener("DOMContentLoaded", () => {
    document.body.appendChild(renderer.domElement);
 });
+
+logCubeStateAfterRotation() //track initial state
