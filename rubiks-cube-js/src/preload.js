@@ -108,18 +108,6 @@ let currentRotation = null;
 const rotationSpeed = 0.1;
 const rotationAngle = Math.PI / 2; // 90 degrees
 
-// Create groups for each face to enable rotation
-const faceGroups = {
-    R: new THREE.Group(), // Right face
-    L: new THREE.Group(), // Left face
-    U: new THREE.Group(), // Up face
-    D: new THREE.Group(), // Down face
-    F: new THREE.Group(), // Front face
-    B: new THREE.Group()  // Back face
-};
-
-// Add face groups to scene
-Object.values(faceGroups).forEach(group => scene.add(group));
 
 // Function to get cubes belonging to a specific face
 function getCubesToRotate(face) {
@@ -182,7 +170,8 @@ function rotateFace(face, clockwise = true) {
     
     isRotating = true;
     const cubes = getCubesToRotate(face);
-    const group = faceGroups[face];
+    const group = new THREE.Group();
+    scene.add(group);
     
     // Temporarily add cubes to the rotation group
     cubes.forEach(cube => {
@@ -227,6 +216,7 @@ function getRotationAxis(face) {
     }
 }
 
+//TODO update tracking based on rotation input, then update the grouping of the regroup the cubes visually based on tracking to let the controls work correctly
 // Function to update cube positions in the array after rotation
 function updateCubeArray(face, clockwise) {
     // This would update the ThreeDCubeArray to reflect the new positions
@@ -321,8 +311,8 @@ function render() {
                 cube.quaternion.copy(worldQuaternion);
             });
             
-            // Reset group rotation
-            group.rotation.set(0, 0, 0);
+            // The group is now empty and the rotation is complete, so remove it from the scene.
+            scene.remove(group);
             
             // Update cube array positions
             updateCubeArray(currentRotation.face, currentRotation.targetAngle > 0);
