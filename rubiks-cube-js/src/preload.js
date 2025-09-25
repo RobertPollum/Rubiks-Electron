@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { generateCube3dArray } from './cube';
+import { CubeStateTracker } from './cubestatetracker';
 
 const scene = new THREE.Scene()
 const adjustmentFactor = .4;
@@ -80,137 +81,6 @@ scene.add(light)
 // // scene.add(cube9);
 let ThreeDCubeArray = generateCube3dArray(3, scene);
 
-// Cube State Tracking System
-class CubeStateTracker {
-    constructor() {
-        this.cubes = new Map(); // Maps cube ID to state
-        this.cubeIdCounter = 0;
-    }
-
-    // Initialize a cube with its starting orientation
-    initializeCube(cubeObject, position) {
-        const cubeId = this.cubeIdCounter++;
-        
-        // Store cube ID in the object
-        cubeObject.userData.cubeId = cubeId;
-        cubeObject.userData.position = position;
-        
-        // Initial cube face orientations
-        // Each cube face is labeled with its initial direction
-        const initialState = {
-            id: cubeId,
-            position: position,
-            faces: {
-                top: 'U',    // Up face initially points up
-                bottom: 'D', // Down face initially points down
-                front: 'F',  // Front face initially points front
-                back: 'B',   // Back face initially points back
-                right: 'R',  // Right face initially points right
-                left: 'L'    // Left face initially points left
-            }
-        };
-        
-        this.cubes.set(cubeId, initialState);
-        return cubeId;
-    }
-
-    // Get cube state by ID
-    getCubeState(cubeId) {
-        return this.cubes.get(cubeId);
-    }
-
-    // Update cube orientation after a rotation
-    rotateCube(cubeId, rotationType) {
-        const state = this.cubes.get(cubeId);
-        if (!state) return;
-
-        const faces = { ...state.faces }; // Copy current faces
-
-        switch(rotationType) {
-            case 'R': // Right face rotation (clockwise when looking at right face)
-                // Rotate faces around X-axis (right-left axis)
-                const tempR = faces.top;
-                faces.top = faces.front;
-                faces.front = faces.bottom;
-                faces.bottom = faces.back;
-                faces.back = tempR;
-                break;
-
-            case 'L': // Left face rotation (clockwise when looking at left face)
-                // Rotate faces around X-axis (opposite direction)
-                const tempL = faces.top;
-                faces.top = faces.back;
-                faces.back = faces.bottom;
-                faces.bottom = faces.front;
-                faces.front = tempL;
-                break;
-
-            case 'U': // Up face rotation (clockwise when looking at up face)
-                // Rotate faces around Y-axis (up-down axis)
-                const tempU = faces.front;
-                faces.front = faces.right;
-                faces.right = faces.back;
-                faces.back = faces.left;
-                faces.left = tempU;
-                break;
-
-            case 'D': // Down face rotation (clockwise when looking at down face)
-                // Rotate faces around Y-axis (opposite direction)
-                const tempD = faces.front;
-                faces.front = faces.left;
-                faces.left = faces.back;
-                faces.back = faces.right;
-                faces.right = tempD;
-                break;
-
-            case 'F': // Front face rotation (clockwise when looking at front face)
-                // Rotate faces around Z-axis (front-back axis)
-                const tempF = faces.top;
-                faces.top = faces.left;
-                faces.left = faces.bottom;
-                faces.bottom = faces.right;
-                faces.right = tempF;
-                break;
-
-            case 'B': // Back face rotation (clockwise when looking at back face)
-                // Rotate faces around Z-axis (opposite direction)
-                const tempB = faces.top;
-                faces.top = faces.right;
-                faces.right = faces.bottom;
-                faces.bottom = faces.left;
-                faces.left = tempB;
-                break;
-        }
-
-        // Update the state
-        state.faces = faces;
-        this.cubes.set(cubeId, state);
-    }
-
-    // Get a string representation of cube orientations
-    getCubeOrientationString(cubeId) {
-        const state = this.cubes.get(cubeId);
-        if (!state) return 'Unknown cube';
-        
-        const f = state.faces;
-        return `Cube ${cubeId}: T=${f.top} B=${f.bottom} F=${f.front} K=${f.back} R=${f.right} L=${f.left}`;
-    }
-
-    // Get all cube states as a formatted string
-    getAllCubeStates() {
-        let result = '=== Cube Orientations ===\n';
-        for (let [cubeId, state] of this.cubes) {
-            result += this.getCubeOrientationString(cubeId) + '\n';
-        }
-        result += '=== End Cube Orientations ===';
-        return result;
-    }
-
-    // Debug function to print current state
-    printAllStates() {
-        console.log(this.getAllCubeStates());
-    }
-}
 
 // Initialize the cube state tracker
 const cubeStateTracker = new CubeStateTracker();
@@ -321,10 +191,11 @@ function rotateFace(face, clockwise = true) {
     const axis = getRotationAxis(face);
     const targetAngle = (Math.PI / 2) * (clockwise ? 1 : -1);
     
-    // Store rotation data for each cube
+    // Store rotation data for each cube based on its current orientation
     cubes.forEach(cube => {
         cube.userData.isRotating = true;
-        cube.userData.rotationAxis = axis.clone();
+        // Get the correct rotation axis based on the cube's current state
+        cube.userData.rotationAxis = cubeStateTracker.getCurrentRotationAxis(cube.userData.cubeId, face);
         cube.userData.targetAngle = targetAngle;
         cube.userData.currentAngle = 0;
     });
@@ -434,8 +305,8 @@ function render() {
         // Apply rotation to each individual cube in place
         cubes.forEach(cube => {
             if (cube.userData.isRotating) {
-                // Rotate the cube in place around its own center
-                cube.rotateOnAxis(axis, rotationStep);
+                // Rotate the cube in place using its individual rotation axis
+                cube.rotateOnAxis(cube.userData.rotationAxis, rotationStep);
                 
                 cube.userData.currentAngle += rotationStep;
             }
@@ -448,8 +319,8 @@ function render() {
             
             cubes.forEach(cube => {
                 if (cube.userData.isRotating) {
-                    // Apply final rotation step to snap to exact angle
-                    cube.rotateOnAxis(axis, remainingAngle);
+                    // Apply final rotation step to snap to exact angle using individual axis
+                    cube.rotateOnAxis(cube.userData.rotationAxis, remainingAngle);
                     
                     // Update cube state tracking
                     cubeStateTracker.rotateCube(cube.userData.cubeId, currentRotation.face);
@@ -457,6 +328,7 @@ function render() {
                     // Clean up rotation data
                     cube.userData.isRotating = false;
                     cube.userData.currentAngle = 0;
+                    cube.userData.rotationAxis = null;
                 }
             });
             
