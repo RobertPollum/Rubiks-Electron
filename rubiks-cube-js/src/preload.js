@@ -155,7 +155,6 @@ function getCubesToRotate(face) {
                     cubes.push(ThreeDCubeArray[0][y][x]);
                 }
             }
-            break;
     }
     
     return cubes;
@@ -170,32 +169,23 @@ function rotateFace(face, clockwise = true) {
     
     isRotating = true;
     const cubes = getCubesToRotate(face);
-    const group = new THREE.Group();
-    scene.add(group);
+    const axis = getRotationAxis(face);
+    const targetAngle = (Math.PI / 2) * (clockwise ? 1 : -1);
     
-    // Temporarily add cubes to the rotation group
+    // Store rotation data for each cube
     cubes.forEach(cube => {
-        // Store original parent and position
-        cube.userData.originalParent = cube.parent;
-        cube.userData.originalPosition = cube.position.clone();
-        cube.userData.originalRotation = cube.rotation.clone();
-        
-        // Convert position to group's local space
-        const worldPosition = new THREE.Vector3();
-        cube.getWorldPosition(worldPosition);
-        scene.remove(cube);
-        group.add(cube);
-        group.worldToLocal(worldPosition);
-        cube.position.copy(worldPosition);
+        cube.userData.isRotating = true;
+        cube.userData.rotationAxis = axis.clone();
+        cube.userData.targetAngle = targetAngle;
+        cube.userData.currentAngle = 0;
     });
     
     currentRotation = {
-        group: group,
         cubes: cubes,
         face: face,
-        targetAngle: clockwise ? rotationAngle : -rotationAngle,
+        targetAngle: targetAngle,
         currentAngle: 0,
-        axis: getRotationAxis(face)
+        axis: axis
     };
 }
 
@@ -279,40 +269,37 @@ renderer.setAnimationLoop(render)
 function render() {
     // Handle cube face rotations
     if (currentRotation) {
-        const { group, cubes, targetAngle, axis } = currentRotation;
+        const { cubes, targetAngle, axis } = currentRotation;
         
         // Calculate rotation step
         const rotationStep = Math.sign(targetAngle) * rotationSpeed;
         currentRotation.currentAngle += rotationStep;
         
-        // Apply rotation
-        group.rotateOnAxis(axis, rotationStep);
+        // Apply rotation to each individual cube in place
+        cubes.forEach(cube => {
+            if (cube.userData.isRotating) {
+                // Rotate the cube in place around its own center
+                cube.rotateOnAxis(axis, rotationStep);
+                
+                cube.userData.currentAngle += rotationStep;
+            }
+        });
         
         // Check if rotation is complete
         if (Math.abs(currentRotation.currentAngle) >= Math.abs(targetAngle)) {
-            // Snap to exact angle
+            // Snap to exact angle for precision
             const remainingAngle = targetAngle - currentRotation.currentAngle;
-            group.rotateOnAxis(axis, remainingAngle);
             
-            // Move cubes back to scene and update positions
             cubes.forEach(cube => {
-                // Get world position and rotation
-                const worldPosition = new THREE.Vector3();
-                const worldQuaternion = new THREE.Quaternion();
-                cube.getWorldPosition(worldPosition);
-                cube.getWorldQuaternion(worldQuaternion);
-                
-                // Remove from group and add back to scene
-                group.remove(cube);
-                scene.add(cube);
-                
-                // Apply world transform
-                cube.position.copy(worldPosition);
-                cube.quaternion.copy(worldQuaternion);
+                if (cube.userData.isRotating) {
+                    // Apply final rotation step to snap to exact angle
+                    cube.rotateOnAxis(axis, remainingAngle);
+                    
+                    // Clean up rotation data
+                    cube.userData.isRotating = false;
+                    cube.userData.currentAngle = 0;
+                }
             });
-            
-            // The group is now empty and the rotation is complete, so remove it from the scene.
-            scene.remove(group);
             
             // Update cube array positions
             updateCubeArray(currentRotation.face, currentRotation.targetAngle > 0);
