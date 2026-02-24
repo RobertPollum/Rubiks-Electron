@@ -216,12 +216,46 @@ function getRotationAxis(face) {
     }
 }
 
-//TODO update tracking based on rotation input, then update the grouping of the regroup the cubes visually based on tracking to let the controls work correctly
 // Function to update cube positions in the array after rotation
 function updateCubeArray(face, clockwise) {
-    // This would update the ThreeDCubeArray to reflect the new positions
-    // Implementation depends on how you want to track the cube state
-    // For now, we'll keep it simple and just update visual positions
+    const allCubes = [];
+    
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                allCubes.push(ThreeDCubeArray[z][y][x]);
+            }
+        }
+    }
+    
+    const newArray = [
+        [[null, null, null], [null, null, null], [null, null, null]],
+        [[null, null, null], [null, null, null], [null, null, null]],
+        [[null, null, null], [null, null, null], [null, null, null]]
+    ];
+    
+    allCubes.forEach(cube => {
+        const pos = cube.position;
+        const tolerance = 0.5;
+        
+        let xIndex, yIndex, zIndex;
+        
+        if (pos.x < -2) xIndex = 0;
+        else if (pos.x > 2) xIndex = 2;
+        else xIndex = 1;
+        
+        if (pos.y < -2) yIndex = 0;
+        else if (pos.y > 2) yIndex = 2;
+        else yIndex = 1;
+        
+        if (pos.z < -2) zIndex = 0;
+        else if (pos.z > 2) zIndex = 2;
+        else zIndex = 1;
+        
+        newArray[zIndex][yIndex][xIndex] = cube;
+    });
+    
+    ThreeDCubeArray = newArray;
 }
 
 // Function to show visual feedback
