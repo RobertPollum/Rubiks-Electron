@@ -258,6 +258,78 @@ function updateCubeArray(face, clockwise) {
     ThreeDCubeArray = newArray;
 }
 
+const FACES = ['R', 'L', 'U', 'D', 'F', 'B'];
+const SCRAMBLE_MOVE_COUNT = 25;
+
+function scrambleCube() {
+    if (isRotating || rotationQueue.length > 0) return;
+    
+    let lastFace = null;
+    for (let i = 0; i < SCRAMBLE_MOVE_COUNT; i++) {
+        let face;
+        do {
+            face = FACES[Math.floor(Math.random() * FACES.length)];
+        } while (face === lastFace);
+        lastFace = face;
+        const clockwise = Math.random() < 0.5;
+        rotateFace(face, clockwise);
+    }
+    
+    const infoElement = document.getElementById('info');
+    if (infoElement) {
+        infoElement.textContent = `Scrambling with ${SCRAMBLE_MOVE_COUNT} random moves...`;
+        infoElement.style.color = '#FF9800';
+        infoElement.style.fontWeight = 'bold';
+    }
+}
+
+function resetCube() {
+    // Cancel any in-progress or queued rotations
+    if (currentRotation) {
+        const { group, cubes } = currentRotation;
+        cubes.forEach(cube => {
+            group.remove(cube);
+            scene.remove(cube);
+        });
+        scene.remove(group);
+        currentRotation = null;
+    }
+    isRotating = false;
+    rotationQueue = [];
+    
+    // Remove all existing cubes from the scene
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube) {
+                    scene.remove(cube);
+                    if (cube.geometry) cube.geometry.dispose();
+                    if (Array.isArray(cube.material)) {
+                        cube.material.forEach(m => m.dispose());
+                    } else if (cube.material) {
+                        cube.material.dispose();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Regenerate a fresh solved cube
+    ThreeDCubeArray = generateCube3dArray(3, scene);
+    
+    const infoElement = document.getElementById('info');
+    if (infoElement) {
+        infoElement.textContent = 'Cube reset to solved state!';
+        infoElement.style.color = '#2196F3';
+        infoElement.style.fontWeight = 'bold';
+        setTimeout(() => {
+            infoElement.textContent = 'Ready for next move';
+            infoElement.style.color = '#333';
+        }, 1500);
+    }
+}
+
 // Function to show visual feedback
 function showRotationFeedback(face, clockwise) {
     const infoElement = document.getElementById('info');
@@ -390,4 +462,11 @@ contextBridge.exposeInMainWorld('versions', {
 
 window.addEventListener("DOMContentLoaded", () => {
    document.body.appendChild(renderer.domElement);
+
+   document.getElementById('scrambleBtn').addEventListener('click', () => {
+       scrambleCube();
+   });
+   document.getElementById('resetBtn').addEventListener('click', () => {
+       resetCube();
+   });
 });
