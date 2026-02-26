@@ -108,6 +108,171 @@ let currentRotation = null;
 const rotationSpeed = 0.1;
 const rotationAngle = Math.PI / 2; // 90 degrees
 
+// Move tracking state
+let moveHistory = [];
+let isScrambling = false;
+let scrambleMoveCount = 0;
+let cubeState = 'solved'; // 'solved' | 'scrambled' | 'solving'
+let sessionSolves = JSON.parse(sessionStorage.getItem('rubiksSolves') || '[]');
+
+const FACE_NORMALS = [
+    new THREE.Vector3(1, 0, 0),   // material 0: +X
+    new THREE.Vector3(-1, 0, 0),  // material 1: -X
+    new THREE.Vector3(0, 1, 0),   // material 2: +Y
+    new THREE.Vector3(0, -1, 0),  // material 3: -Y
+    new THREE.Vector3(0, 0, 1),   // material 4: +Z
+    new THREE.Vector3(0, 0, -1),  // material 5: -Z
+];
+
+function getMaterialFacingDirection(cube, worldDir) {
+    let bestDot = -Infinity;
+    let bestIndex = 0;
+    for (let i = 0; i < 6; i++) {
+        const worldNormal = FACE_NORMALS[i].clone().applyQuaternion(cube.quaternion);
+        const dot = worldNormal.dot(worldDir);
+        if (dot > bestDot) {
+            bestDot = dot;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+function isCubeSolved() {
+    const faceChecks = [
+        { dir: new THREE.Vector3(1, 0, 0),  getCubes: () => { const c=[]; for(let y=0;y<3;y++) for(let z=0;z<3;z++) c.push(ThreeDCubeArray[z][y][2]); return c; } },
+        { dir: new THREE.Vector3(-1, 0, 0), getCubes: () => { const c=[]; for(let y=0;y<3;y++) for(let z=0;z<3;z++) c.push(ThreeDCubeArray[z][y][0]); return c; } },
+        { dir: new THREE.Vector3(0, 1, 0),  getCubes: () => { const c=[]; for(let x=0;x<3;x++) for(let z=0;z<3;z++) c.push(ThreeDCubeArray[z][2][x]); return c; } },
+        { dir: new THREE.Vector3(0, -1, 0), getCubes: () => { const c=[]; for(let x=0;x<3;x++) for(let z=0;z<3;z++) c.push(ThreeDCubeArray[z][0][x]); return c; } },
+        { dir: new THREE.Vector3(0, 0, 1),  getCubes: () => { const c=[]; for(let x=0;x<3;x++) for(let y=0;y<3;y++) c.push(ThreeDCubeArray[2][y][x]); return c; } },
+        { dir: new THREE.Vector3(0, 0, -1), getCubes: () => { const c=[]; for(let x=0;x<3;x++) for(let y=0;y<3;y++) c.push(ThreeDCubeArray[0][y][x]); return c; } },
+    ];
+
+    for (const face of faceChecks) {
+        const cubes = face.getCubes();
+        const firstMat = getMaterialFacingDirection(cubes[0], face.dir);
+        for (let i = 1; i < cubes.length; i++) {
+            if (getMaterialFacingDirection(cubes[i], face.dir) !== firstMat) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+function formatMoveNotation(face, clockwise) {
+    return clockwise ? face : face + "'";
+}
+
+function logMove(face, clockwise, isScrambleMove) {
+    const notation = formatMoveNotation(face, clockwise);
+    moveHistory.push({ notation, isScrambleMove, timestamp: Date.now() });
+    renderMoveList();
+    updateMoveCount();
+}
+
+function renderMoveList() {
+    const moveListEl = document.getElementById('move-list');
+    if (!moveListEl) return;
+    moveListEl.innerHTML = '';
+    moveHistory.forEach((move, i) => {
+        const div = document.createElement('div');
+        div.className = 'move-entry' + (move.isScrambleMove ? ' scramble-move' : '');
+        div.innerHTML = `<span class="move-num">${i + 1}.</span><span class="move-notation">${move.notation}</span>`;
+        moveListEl.appendChild(div);
+    });
+    moveListEl.scrollTop = moveListEl.scrollHeight;
+}
+
+function updateMoveCount() {
+    const el = document.getElementById('move-count');
+    if (!el) return;
+    const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
+    el.textContent = `Moves: ${userMoves}`;
+}
+
+function updateCubeStateUI(state) {
+    cubeState = state;
+    const el = document.getElementById('cube-state');
+    if (!el) return;
+    el.className = '';
+    switch (state) {
+        case 'solved':
+            el.textContent = 'Solved';
+            el.classList.add('state-solved');
+            break;
+        case 'scrambled':
+            el.textContent = 'Scrambled';
+            el.classList.add('state-scrambled');
+            break;
+        case 'solving':
+            el.textContent = 'Solving';
+            el.classList.add('state-solving');
+            break;
+    }
+}
+
+function recordSolve() {
+    const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
+    const solve = {
+        moves: userMoves,
+        timestamp: new Date().toLocaleTimeString(),
+        date: new Date().toLocaleDateString()
+    };
+    sessionSolves.push(solve);
+    sessionStorage.setItem('rubiksSolves', JSON.stringify(sessionSolves));
+    renderSolveList();
+}
+
+function renderSolveList() {
+    const el = document.getElementById('solve-list');
+    if (!el) return;
+    el.innerHTML = '';
+    if (sessionSolves.length === 0) {
+        el.innerHTML = '<div style="color:#888;font-style:italic;">No solves yet</div>';
+        return;
+    }
+    sessionSolves.slice().reverse().forEach((solve, i) => {
+        const div = document.createElement('div');
+        div.className = 'solve-entry';
+        div.innerHTML = `<span class="solve-moves">${solve.moves} moves</span> <span class="solve-time">${solve.timestamp}</span>`;
+        el.appendChild(div);
+    });
+}
+
+function clearMoveHistory() {
+    moveHistory = [];
+    renderMoveList();
+    updateMoveCount();
+}
+
+function onRotationComplete(face, clockwise) {
+    const isScrambleMove = isScrambling;
+    logMove(face, clockwise, isScrambleMove);
+
+    if (isScrambling) {
+        scrambleMoveCount--;
+        if (scrambleMoveCount <= 0) {
+            isScrambling = false;
+            updateCubeStateUI('scrambled');
+        }
+    } else if (cubeState !== 'solved') {
+        if (cubeState === 'scrambled') {
+            updateCubeStateUI('solving');
+        }
+        if (isCubeSolved()) {
+            updateCubeStateUI('solved');
+            recordSolve();
+            const infoElement = document.getElementById('info');
+            if (infoElement) {
+                const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
+                infoElement.textContent = `Cube solved in ${userMoves} moves!`;
+                infoElement.style.color = '#4CAF50';
+                infoElement.style.fontWeight = 'bold';
+            }
+        }
+    }
+}
 
 // Function to get cubes belonging to a specific face
 function getCubesToRotate(face) {
@@ -264,6 +429,11 @@ const SCRAMBLE_MOVE_COUNT = 25;
 function scrambleCube() {
     if (isRotating || rotationQueue.length > 0) return;
     
+    clearMoveHistory();
+    isScrambling = true;
+    scrambleMoveCount = SCRAMBLE_MOVE_COUNT;
+    updateCubeStateUI('scrambled');
+    
     let lastFace = null;
     for (let i = 0; i < SCRAMBLE_MOVE_COUNT; i++) {
         let face;
@@ -287,14 +457,31 @@ function resetCube() {
     // Cancel any in-progress or queued rotations
     if (currentRotation) {
         const { group, cubes } = currentRotation;
+        
+        // Move cubes back to scene and update positions
         cubes.forEach(cube => {
+            // Get world position and rotation
+            const worldPosition = new THREE.Vector3();
+            const worldQuaternion = new THREE.Quaternion();
+            cube.getWorldPosition(worldPosition);
+            cube.getWorldQuaternion(worldQuaternion);
+            
+            // Remove from group and add back to scene
             group.remove(cube);
-            scene.remove(cube);
+            scene.add(cube);
+            
+            // Apply world transform
+            cube.position.copy(worldPosition);
+            cube.quaternion.copy(worldQuaternion);
         });
+        
+        // The group is now empty and the rotation is complete, so remove it from the scene.
         scene.remove(group);
+        
+        // Reset rotation state
         currentRotation = null;
+        isRotating = false;
     }
-    isRotating = false;
     rotationQueue = [];
     
     // Remove all existing cubes from the scene
@@ -317,6 +504,11 @@ function resetCube() {
     
     // Regenerate a fresh solved cube
     ThreeDCubeArray = generateCube3dArray(3, scene);
+    
+    clearMoveHistory();
+    isScrambling = false;
+    scrambleMoveCount = 0;
+    updateCubeStateUI('solved');
     
     const infoElement = document.getElementById('info');
     if (infoElement) {
@@ -421,7 +613,12 @@ function render() {
             scene.remove(group);
             
             // Update cube array positions
-            updateCubeArray(currentRotation.face, currentRotation.targetAngle > 0);
+            const completedFace = currentRotation.face;
+            const completedClockwise = currentRotation.targetAngle > 0;
+            updateCubeArray(completedFace, completedClockwise);
+            
+            // Track the completed move
+            onRotationComplete(completedFace, completedClockwise);
             
             // Reset rotation state
             currentRotation = null;
@@ -461,7 +658,7 @@ contextBridge.exposeInMainWorld('versions', {
 });
 
 window.addEventListener("DOMContentLoaded", () => {
-   document.body.appendChild(renderer.domElement);
+   document.getElementById('main-content').appendChild(renderer.domElement);
 
    document.getElementById('scrambleBtn').addEventListener('click', () => {
        scrambleCube();
@@ -469,4 +666,7 @@ window.addEventListener("DOMContentLoaded", () => {
    document.getElementById('resetBtn').addEventListener('click', () => {
        resetCube();
    });
+
+   renderSolveList();
+   updateCubeStateUI('solved');
 });

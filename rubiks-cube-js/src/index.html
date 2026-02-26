@@ -6,30 +6,46 @@
     <meta content="text/html; charset=utf-8" />
   </head>
   <body>
-    <h1>🧩 Rubik's Cube Simulator</h1>
-    <p>Welcome to your interactive Rubik's Cube!</p>
-    <div id="controls" style="position: relative; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 15px; border-radius: 8px; font-family: Arial, sans-serif; z-index: 1000;">
-      <h3>Controls:</h3>
-      <ul style="margin: 0; padding-left: 20px;">
-        <li><strong>R</strong> - Rotate Right face clockwise</li>
-        <li><strong>Shift+R</strong> - Rotate Right face counter-clockwise</li>
-        <li><strong>L</strong> - Rotate Left face clockwise</li>
-        <li><strong>Shift+L</strong> - Rotate Left face counter-clockwise</li>
-        <li><strong>U</strong> - Rotate Up face clockwise</li>
-        <li><strong>Shift+U</strong> - Rotate Up face counter-clockwise</li>
-        <li><strong>D</strong> - Rotate Down face clockwise</li>
-        <li><strong>Shift+D</strong> - Rotate Down face counter-clockwise</li>
-        <li><strong>F</strong> - Rotate Front face clockwise</li>
-        <li><strong>Shift+F</strong> - Rotate Front face counter-clockwise</li>
-        <li><strong>B</strong> - Rotate Back face clockwise</li>
-        <li><strong>Shift+B</strong> - Rotate Back face counter-clockwise</li>
-      </ul>
+    <div id="app-layout">
+      <div id="main-content">
+        <h1>🧩 Rubik's Cube Simulator</h1>
+        <p>Welcome to your interactive Rubik's Cube!</p>
+        <div id="controls">
+          <h3>Controls:</h3>
+          <ul>
+            <li><strong>R</strong> - Rotate Right face clockwise</li>
+            <li><strong>Shift+R</strong> - Rotate Right face counter-clockwise</li>
+            <li><strong>L</strong> - Rotate Left face clockwise</li>
+            <li><strong>Shift+L</strong> - Rotate Left face counter-clockwise</li>
+            <li><strong>U</strong> - Rotate Up face clockwise</li>
+            <li><strong>Shift+U</strong> - Rotate Up face counter-clockwise</li>
+            <li><strong>D</strong> - Rotate Down face clockwise</li>
+            <li><strong>Shift+D</strong> - Rotate Down face counter-clockwise</li>
+            <li><strong>F</strong> - Rotate Front face clockwise</li>
+            <li><strong>Shift+F</strong> - Rotate Front face counter-clockwise</li>
+            <li><strong>B</strong> - Rotate Back face clockwise</li>
+            <li><strong>Shift+B</strong> - Rotate Back face counter-clockwise</li>
+          </ul>
+        </div>
+        <div id="actions">
+          <button id="scrambleBtn">🎲 Scramble</button>
+          <button id="resetBtn">🔄 Reset</button>
+        </div>
+        <p id="info"></p>
+      </div>
+      <div id="sidebar">
+        <h3>Move History</h3>
+        <div id="sidebar-status">
+          <span id="move-count">Moves: 0</span>
+          <span id="cube-state" class="state-solved">Solved</span>
+        </div>
+        <div id="move-list"></div>
+        <div id="session-history">
+          <h4>Session Solves</h4>
+          <div id="solve-list"></div>
+        </div>
+      </div>
     </div>
-    <div id="actions" style="position: relative; top: 10px; left: 10px; z-index: 1000; display: flex; gap: 10px; margin-bottom: 10px;">
-      <button id="scrambleBtn" style="padding: 10px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; background: #4CAF50; color: white; cursor: pointer; transition: background 0.2s;">🎲 Scramble</button>
-      <button id="resetBtn" style="padding: 10px 24px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; background: #2196F3; color: white; cursor: pointer; transition: background 0.2s;">🔄 Reset</button>
-    </div>
-    <p id="info"></p>
   </body>
   <script type="text/javascript" src="./renderer.js"></script>
 </html>
