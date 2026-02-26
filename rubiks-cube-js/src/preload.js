@@ -164,9 +164,9 @@ function formatMoveNotation(face, clockwise) {
     return clockwise ? face : face + "'";
 }
 
-function logMove(face, clockwise, isScrambleMove) {
+function logMove(face, clockwise) {
     const notation = formatMoveNotation(face, clockwise);
-    moveHistory.push({ notation, isScrambleMove, timestamp: Date.now() });
+    moveHistory.push({ notation, timestamp: Date.now() });
     renderMoveList();
     updateMoveCount();
 }
@@ -177,7 +177,7 @@ function renderMoveList() {
     moveListEl.innerHTML = '';
     moveHistory.forEach((move, i) => {
         const div = document.createElement('div');
-        div.className = 'move-entry' + (move.isScrambleMove ? ' scramble-move' : '');
+        div.className = 'move-entry';
         div.innerHTML = `<span class="move-num">${i + 1}.</span><span class="move-notation">${move.notation}</span>`;
         moveListEl.appendChild(div);
     });
@@ -187,8 +187,7 @@ function renderMoveList() {
 function updateMoveCount() {
     const el = document.getElementById('move-count');
     if (!el) return;
-    const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
-    el.textContent = `Moves: ${userMoves}`;
+    el.textContent = `Moves: ${moveHistory.length}`;
 }
 
 function updateCubeStateUI(state) {
@@ -213,9 +212,8 @@ function updateCubeStateUI(state) {
 }
 
 function recordSolve() {
-    const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
     const solve = {
-        moves: userMoves,
+        moves: moveHistory.length,
         timestamp: new Date().toLocaleTimeString(),
         date: new Date().toLocaleDateString()
     };
@@ -247,16 +245,18 @@ function clearMoveHistory() {
 }
 
 function onRotationComplete(face, clockwise) {
-    const isScrambleMove = isScrambling;
-    logMove(face, clockwise, isScrambleMove);
-
     if (isScrambling) {
         scrambleMoveCount--;
         if (scrambleMoveCount <= 0) {
             isScrambling = false;
             updateCubeStateUI('scrambled');
         }
-    } else if (cubeState !== 'solved') {
+        return;
+    }
+
+    logMove(face, clockwise);
+
+    if (cubeState !== 'solved') {
         if (cubeState === 'scrambled') {
             updateCubeStateUI('solving');
         }
@@ -265,8 +265,7 @@ function onRotationComplete(face, clockwise) {
             recordSolve();
             const infoElement = document.getElementById('info');
             if (infoElement) {
-                const userMoves = moveHistory.filter(m => !m.isScrambleMove).length;
-                infoElement.textContent = `Cube solved in ${userMoves} moves!`;
+                infoElement.textContent = `Cube solved in ${moveHistory.length} moves!`;
                 infoElement.style.color = '#4CAF50';
                 infoElement.style.fontWeight = 'bold';
             }
