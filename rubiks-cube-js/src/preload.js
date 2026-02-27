@@ -2,6 +2,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 const { contextBridge } = require('electron')
+import { loadData, saveData, serializeCubies } from './storage';
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -113,7 +114,8 @@ let moveHistory = [];
 let isScrambling = false;
 let scrambleMoveCount = 0;
 let cubeState = 'solved'; // 'solved' | 'scrambled' | 'solving'
-let sessionSolves = JSON.parse(sessionStorage.getItem('rubiksSolves') || '[]');
+let gameData = loadData();
+let sessionSolves = gameData.solves || [];
 
 const FACE_NORMALS = [
     new THREE.Vector3(1, 0, 0),   // material 0: +X
@@ -211,6 +213,36 @@ function updateCubeStateUI(state) {
     }
 }
 
+function persistGameState() {
+    gameData.currentGame = {
+        moveHistory: moveHistory,
+        cubeState: cubeState,
+        cubies: serializeCubies(ThreeDCubeArray)
+    };
+    gameData.solves = sessionSolves;
+    updateStats();
+    saveData(gameData);
+}
+
+function updateStats() {
+    const solves = sessionSolves;
+    gameData.stats = {
+        totalSolves: solves.length,
+        bestSolve: solves.length > 0 ? Math.min(...solves.map(s => s.moves)) : null,
+        averageMoves: solves.length > 0 ? Math.round(solves.reduce((sum, s) => sum + s.moves, 0) / solves.length) : 0
+    };
+    renderStats();
+}
+
+function renderStats() {
+    const el = document.getElementById('stats-display');
+    if (!el) return;
+    const { totalSolves, bestSolve, averageMoves } = gameData.stats;
+    el.innerHTML = `<span>Total: <strong>${totalSolves}</strong></span>` +
+        `<span>Best: <strong>${bestSolve !== null ? bestSolve : '-'}</strong></span>` +
+        `<span>Avg: <strong>${averageMoves || '-'}</strong></span>`;
+}
+
 function recordSolve() {
     const solve = {
         moves: moveHistory.length,
@@ -218,8 +250,8 @@ function recordSolve() {
         date: new Date().toLocaleDateString()
     };
     sessionSolves.push(solve);
-    sessionStorage.setItem('rubiksSolves', JSON.stringify(sessionSolves));
     renderSolveList();
+    persistGameState();
 }
 
 function renderSolveList() {
@@ -233,7 +265,7 @@ function renderSolveList() {
     sessionSolves.slice().reverse().forEach((solve, i) => {
         const div = document.createElement('div');
         div.className = 'solve-entry';
-        div.innerHTML = `<span class="solve-moves">${solve.moves} moves</span> <span class="solve-time">${solve.timestamp}</span>`;
+        div.innerHTML = `<span class="solve-moves">${solve.moves} moves</span> <span class="solve-time">${solve.timestamp} ${solve.date}</span>`;
         el.appendChild(div);
     });
 }
@@ -244,12 +276,30 @@ function clearMoveHistory() {
     updateMoveCount();
 }
 
+function restoreCubeState(savedCubies) {
+    if (!savedCubies || savedCubies.length !== 27) return false;
+    try {
+        for (const saved of savedCubies) {
+            const cube = ThreeDCubeArray[saved.index.z][saved.index.y][saved.index.x];
+            if (!cube) return false;
+            cube.position.set(saved.position.x, saved.position.y, saved.position.z);
+            cube.quaternion.set(saved.quaternion.x, saved.quaternion.y, saved.quaternion.z, saved.quaternion.w);
+        }
+        updateCubeArray();
+        return true;
+    } catch (err) {
+        console.error('Failed to restore cube state:', err);
+        return false;
+    }
+}
+
 function onRotationComplete(face, clockwise) {
     if (isScrambling) {
         scrambleMoveCount--;
         if (scrambleMoveCount <= 0) {
             isScrambling = false;
             updateCubeStateUI('scrambled');
+            persistGameState();
         }
         return;
     }
@@ -271,6 +321,8 @@ function onRotationComplete(face, clockwise) {
             }
         }
     }
+
+    persistGameState();
 }
 
 // Function to get cubes belonging to a specific face
@@ -381,7 +433,7 @@ function getRotationAxis(face) {
 }
 
 // Function to update cube positions in the array after rotation
-function updateCubeArray(face, clockwise) {
+function updateCubeArray() {
     const allCubes = [];
     
     for (let z = 0; z < 3; z++) {
@@ -508,6 +560,7 @@ function resetCube() {
     isScrambling = false;
     scrambleMoveCount = 0;
     updateCubeStateUI('solved');
+    persistGameState();
     
     const infoElement = document.getElementById('info');
     if (infoElement) {
@@ -612,12 +665,10 @@ function render() {
             scene.remove(group);
             
             // Update cube array positions
-            const completedFace = currentRotation.face;
-            const completedClockwise = currentRotation.targetAngle > 0;
-            updateCubeArray(completedFace, completedClockwise);
+            updateCubeArray();
             
             // Track the completed move
-            onRotationComplete(completedFace, completedClockwise);
+            onRotationComplete(currentRotation.face, currentRotation.targetAngle > 0);
             
             // Reset rotation state
             currentRotation = null;
@@ -667,5 +718,25 @@ window.addEventListener("DOMContentLoaded", () => {
    });
 
    renderSolveList();
-   updateCubeStateUI('solved');
+   renderStats();
+
+   const saved = gameData.currentGame;
+   if (saved && saved.cubies && saved.cubeState !== 'solved') {
+       const restored = restoreCubeState(saved.cubies);
+       if (restored) {
+           moveHistory = saved.moveHistory || [];
+           renderMoveList();
+           updateMoveCount();
+           updateCubeStateUI(saved.cubeState);
+           const infoElement = document.getElementById('info');
+           if (infoElement) {
+               infoElement.textContent = 'Resumed previous game';
+               infoElement.style.color = '#FF9800';
+           }
+       } else {
+           updateCubeStateUI('solved');
+       }
+   } else {
+       updateCubeStateUI('solved');
+   }
 });
