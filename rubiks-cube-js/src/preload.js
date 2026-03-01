@@ -81,8 +81,10 @@ scene.add(light)
 // // scene.add(cube9);
 let ThreeDCubeArray = generateCube3dArray(3, scene);
 const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000);
-camera.position.set(0, 3, 12);
-camera.lookAt(new THREE.Vector3(0, 0, 0))
+const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 3, 12);
+const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
+camera.position.copy(DEFAULT_CAMERA_POSITION);
+camera.lookAt(DEFAULT_CAMERA_TARGET);
 scene.add(camera);
 
 const renderer = new THREE.WebGLRenderer({
@@ -574,6 +576,21 @@ function resetCube() {
     }
 }
 
+let cameraResetting = false;
+let cameraResetAlpha = 0;
+const CAMERA_RESET_SPEED = 0.04;
+
+function resetCamera() {
+    cameraResetting = true;
+    cameraResetAlpha = 0;
+    const infoElement = document.getElementById('info');
+    if (infoElement) {
+        infoElement.textContent = 'Resetting view...';
+        infoElement.style.color = '#2196F3';
+        infoElement.style.fontWeight = 'bold';
+    }
+}
+
 // Function to show visual feedback
 function showRotationFeedback(face, clockwise) {
     const infoElement = document.getElementById('info');
@@ -620,6 +637,10 @@ document.addEventListener('keydown', (event) => {
         case 'b':
             rotateFace('B', clockwise);
             showRotationFeedback('Back', clockwise);
+            break;
+        case ' ':
+            event.preventDefault();
+            resetCamera();
             break;
     }
 });
@@ -680,6 +701,25 @@ function render() {
                 rotateFace(nextRotation.face, nextRotation.clockwise);
             }
         }
+    }
+    if (cameraResetting) {
+        cameraResetAlpha += CAMERA_RESET_SPEED;
+        if (cameraResetAlpha >= 1) {
+            cameraResetAlpha = 1;
+            cameraResetting = false;
+            const infoElement = document.getElementById('info');
+            if (infoElement) {
+                infoElement.textContent = 'Ready for next move';
+                infoElement.style.color = '#333';
+                infoElement.style.fontWeight = 'normal';
+            }
+        }
+        camera.position.lerpVectors(
+            camera.position.clone(),
+            DEFAULT_CAMERA_POSITION,
+            cameraResetAlpha
+        );
+        controls.target.lerp(DEFAULT_CAMERA_TARGET, cameraResetAlpha);
     }
     // Update camera controls (damped orbiting)
     controls.update();
