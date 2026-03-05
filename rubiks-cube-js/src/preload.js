@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { generateCube3dArray } from './cube';
+import { THEMES, FACE_LABELS, getThemeColors, hexToInt, DEFAULT_THEME } from './themes';
 
 const scene = new THREE.Scene()
 const adjustmentFactor = .4;
@@ -79,7 +80,20 @@ scene.add(light)
 // // scene.add(cube7);
 // // scene.add(cube8);
 // // scene.add(cube9);
-let ThreeDCubeArray = generateCube3dArray(3, scene);
+
+// Load persisted data early so getActiveColors() works before cube generation
+let gameData = loadData();
+let sessionSolves = gameData.solves || [];
+
+function getActiveColors() {
+    const settings = gameData.settings || {};
+    if (settings.customColors && Array.isArray(settings.customColors) && settings.customColors.length === 6) {
+        return settings.customColors;
+    }
+    return getThemeColors(settings.theme || DEFAULT_THEME);
+}
+
+let ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
 const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 1000);
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 3, 12);
 const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
@@ -116,8 +130,6 @@ let moveHistory = [];
 let isScrambling = false;
 let scrambleMoveCount = 0;
 let cubeState = 'solved'; // 'solved' | 'scrambled' | 'solving'
-let gameData = loadData();
-let sessionSolves = gameData.solves || [];
 
 const FACE_NORMALS = [
     new THREE.Vector3(1, 0, 0),   // material 0: +X
@@ -131,9 +143,9 @@ const FACE_NORMALS = [
 function getMaterialFacingDirection(cube, worldDir) {
     let bestDot = -Infinity;
     let bestIndex = 0;
-    for (let i = 0; i < 6; i++) {
-        const worldNormal = FACE_NORMALS[i].clone().applyQuaternion(cube.quaternion);
-        const dot = worldNormal.dot(worldDir);
+    for (let i = 0; i < FACE_NORMALS.length; i++) {
+        const localNormal = FACE_NORMALS[i].clone().applyQuaternion(cube.quaternion);
+        const dot = localNormal.dot(worldDir);
         if (dot > bestDot) {
             bestDot = dot;
             bestIndex = i;
@@ -556,7 +568,7 @@ function resetCube() {
     }
     
     // Regenerate a fresh solved cube
-    ThreeDCubeArray = generateCube3dArray(3, scene);
+    ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
     
     clearMoveHistory();
     isScrambling = false;
@@ -608,8 +620,154 @@ function showRotationFeedback(face, clockwise) {
     }
 }
 
+// Settings modal state
+let settingsOpen = false;
+
+function applyColorsToExistingCube(colors) {
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube && Array.isArray(cube.material)) {
+                    cube.material.forEach((mat, i) => {
+                        if (i < colors.length) {
+                            mat.color.set(typeof colors[i] === 'string' ? hexToInt(colors[i]) : colors[i]);
+                        }
+                    });
+                }
+            }
+        }
+    }
+}
+
+function applyTheme(themeId) {
+    gameData.settings = gameData.settings || {};
+    gameData.settings.theme = themeId;
+    gameData.settings.customColors = null;
+    const colors = getThemeColors(themeId);
+    applyColorsToExistingCube(colors);
+    saveData(gameData);
+    renderSettingsModal();
+}
+
+function applyCustomColor(faceIndex, hexColor) {
+    gameData.settings = gameData.settings || {};
+    if (!gameData.settings.customColors || !Array.isArray(gameData.settings.customColors)) {
+        gameData.settings.customColors = getActiveColors();
+    }
+    gameData.settings.customColors[faceIndex] = hexColor;
+    applyColorsToExistingCube(gameData.settings.customColors);
+    saveData(gameData);
+}
+
+function openSettings() {
+    settingsOpen = true;
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.add('visible');
+        renderSettingsModal();
+    }
+}
+
+function closeSettings() {
+    settingsOpen = false;
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.remove('visible');
+    }
+}
+
+function renderSettingsModal() {
+    const container = document.getElementById('settings-content');
+    if (!container) return;
+
+    const currentTheme = (gameData.settings && gameData.settings.theme) || DEFAULT_THEME;
+    const currentColors = getActiveColors();
+    const isCustom = gameData.settings && gameData.settings.customColors && Array.isArray(gameData.settings.customColors);
+
+    let html = '<div class="settings-section">';
+    html += '<h4>Color Theme</h4>';
+    html += '<div class="theme-grid">';
+    for (const [id, theme] of Object.entries(THEMES)) {
+        const isActive = !isCustom && currentTheme === id;
+        html += `<button class="theme-btn ${isActive ? 'active' : ''}" data-theme="${id}" title="${theme.description}">`;
+        html += `<div class="theme-preview">`;
+        theme.colors.forEach(c => {
+            html += `<span class="theme-swatch" style="background:${c}"></span>`;
+        });
+        html += `</div>`;
+        html += `<span class="theme-name">${theme.name}</span>`;
+        html += `</button>`;
+    }
+    html += '</div></div>';
+
+    html += '<div class="settings-section">';
+    html += '<h4>Custom Face Colors</h4>';
+    html += '<p class="settings-hint">Click a color to customize individual faces. Editing any color switches to custom mode.</p>';
+    html += '<div class="face-colors">';
+    FACE_LABELS.forEach((label, i) => {
+        const color = currentColors[i];
+        html += `<div class="face-color-row">`;
+        html += `<label>${label}</label>`;
+        html += `<div class="color-input-group">`;
+        html += `<input type="color" class="face-color-picker" data-face="${i}" value="${color}">`;
+        html += `<input type="text" class="face-color-hex" data-face="${i}" value="${color}" maxlength="7" spellcheck="false">`;
+        html += `</div>`;
+        html += `</div>`;
+    });
+    html += '</div>';
+    if (isCustom) {
+        html += `<button id="reset-to-theme-btn" class="settings-action-btn">Reset to ${THEMES[currentTheme]?.name || 'Standard'} theme</button>`;
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            applyTheme(btn.dataset.theme);
+        });
+    });
+
+    container.querySelectorAll('.face-color-picker').forEach(picker => {
+        picker.addEventListener('input', (e) => {
+            const faceIdx = parseInt(e.target.dataset.face);
+            const hex = e.target.value;
+            applyCustomColor(faceIdx, hex);
+            const hexInput = container.querySelector(`.face-color-hex[data-face="${faceIdx}"]`);
+            if (hexInput) hexInput.value = hex;
+        });
+    });
+
+    container.querySelectorAll('.face-color-hex').forEach(hexInput => {
+        hexInput.addEventListener('change', (e) => {
+            const faceIdx = parseInt(e.target.dataset.face);
+            let hex = e.target.value.trim();
+            if (!hex.startsWith('#')) hex = '#' + hex;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                applyCustomColor(faceIdx, hex);
+                const picker = container.querySelector(`.face-color-picker[data-face="${faceIdx}"]`);
+                if (picker) picker.value = hex;
+            } else {
+                e.target.value = getActiveColors()[faceIdx];
+            }
+        });
+    });
+
+    const resetBtn = container.querySelector('#reset-to-theme-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            applyTheme(currentTheme);
+        });
+    }
+}
+
 // Keyboard controls for cube rotations
 document.addEventListener('keydown', (event) => {
+    if (settingsOpen) {
+        if (event.key === 'Escape') closeSettings();
+        return;
+    }
     const key = event.key.toLowerCase();
     const clockwise = !event.shiftKey;
     
@@ -755,6 +913,15 @@ window.addEventListener("DOMContentLoaded", () => {
    });
    document.getElementById('resetBtn').addEventListener('click', () => {
        resetCube();
+   });
+   document.getElementById('settingsBtn').addEventListener('click', () => {
+       openSettings();
+   });
+   document.getElementById('settings-close').addEventListener('click', () => {
+       closeSettings();
+   });
+   document.getElementById('settings-modal').addEventListener('click', (e) => {
+       if (e.target.id === 'settings-modal') closeSettings();
    });
 
    renderSolveList();

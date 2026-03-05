@@ -11,6 +11,10 @@ const DEFAULT_DATA = {
         totalSolves: 0,
         bestSolve: null,
         averageMoves: 0
+    },
+    settings: {
+        theme: 'standard',
+        customColors: null
     }
 };
 
