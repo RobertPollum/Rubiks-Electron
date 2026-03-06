@@ -144,6 +144,11 @@ let lastScrambleMoves = [];
 let isReplaying = false;
 let replayMoveCount = 0;
 
+function getReplaySpeed() {
+    const spd = gameData.settings && gameData.settings.replaySpeed;
+    return (typeof spd === 'number' && spd >= 0.25 && spd <= 3) ? spd : 1;
+}
+
 const FACE_NORMALS = [
     new THREE.Vector3(1, 0, 0),   // material 0: +X
     new THREE.Vector3(-1, 0, 0),  // material 1: -X
@@ -1010,6 +1015,14 @@ function renderSettingsModal() {
     html += '</div></div>';
 
     html += '<div class="settings-section">';
+    html += '<h4>Replay Speed</h4>';
+    html += '<p class="settings-hint">Controls how fast moves animate during replay.</p>';
+    html += '<div class="replay-speed-row">';
+    html += `<input type="range" id="replay-speed-slider" min="0.25" max="3" step="0.25" value="${getReplaySpeed()}">`;
+    html += `<span id="replay-speed-label">${getReplaySpeed()}x</span>`;
+    html += '</div></div>';
+
+    html += '<div class="settings-section">';
     html += '<h4>Import / Export</h4>';
     html += '<p class="settings-hint">Share color schemes as JSON files.</p>';
     html += '<div class="import-export-row">';
@@ -1110,6 +1123,19 @@ function renderSettingsModal() {
         scrambleInput.addEventListener('keypress', (e) => e.stopPropagation());
     }
 
+    // Replay speed
+    const replaySlider = container.querySelector('#replay-speed-slider');
+    const replayLabel = container.querySelector('#replay-speed-label');
+    if (replaySlider && replayLabel) {
+        replaySlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            replayLabel.textContent = val + 'x';
+            gameData.settings = gameData.settings || {};
+            gameData.settings.replaySpeed = val;
+            saveData(gameData);
+        });
+    }
+
     // Export / Import
     const exportBtn = container.querySelector('#export-btn');
     if (exportBtn) exportBtn.addEventListener('click', exportColorScheme);
@@ -1167,7 +1193,8 @@ function render() {
         const { group, cubes, targetAngle, axis } = currentRotation;
         
         // Calculate rotation step
-        const rotationStep = Math.sign(targetAngle) * rotationSpeed;
+        const activeSpeed = isReplaying ? rotationSpeed * getReplaySpeed() : rotationSpeed;
+        const rotationStep = Math.sign(targetAngle) * activeSpeed;
         currentRotation.currentAngle += rotationStep;
         
         // Apply rotation

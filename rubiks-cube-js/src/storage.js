@@ -16,7 +16,8 @@ const DEFAULT_DATA = {
         theme: 'standard',
         customColors: null,
         userPresets: [],
-        scrambleAmount: 25
+        scrambleAmount: 25,
+        replaySpeed: 1
     }
 };
 

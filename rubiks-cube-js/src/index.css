@@ -543,6 +543,27 @@ body {
   opacity: 1;
 }
 
+/* Replay Speed Row */
+.replay-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#replay-speed-slider {
+  flex: 1;
+  accent-color: #7C4DFF;
+  cursor: pointer;
+}
+
+#replay-speed-label {
+  min-width: 36px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #ddd;
+  text-align: right;
+}
+
 /* Import / Export Row */
 .import-export-row {
   display: flex;
