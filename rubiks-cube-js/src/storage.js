@@ -15,7 +15,8 @@ const DEFAULT_DATA = {
     settings: {
         theme: 'standard',
         customColors: null,
-        userPresets: []
+        userPresets: [],
+        scrambleAmount: 25
     }
 };
 

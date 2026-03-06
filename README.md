@@ -13,8 +13,8 @@ This is my attempt at learning electron since it gives the ability to build desk
     - This will help me define the data store for the cube and state
 - [x] Create scambling logic for the cube so that it can actually be solved
     - IE Sides need to pair up correctly so that once __solved__ for a side, the edges on each side will match up.
-    - [ ] Make the amount the cube scrambles user defined (IE, between 1 and infinity)
-    - [ ] Save the scramble amount to user settings
+    - [x] Make the amount the cube scrambles user defined (IE, between 1 and infinity)
+    - [x] Save the scramble amount to user settings
 - [x] Create interaction with cube to change rows
     - Functions will need to be defined for how the 9x9x9 matrix will transform based on the move
     - Create a visual transformation within the cube
@@ -27,5 +27,7 @@ This is my attempt at learning electron since it gives the ability to build desk
 - [ ] Storage for session to allow user to return and pick up where they left off when the application opens/closes
 - [ ] Allow user to modify the cube
     - [ ] Allow them to modify number of cubes 2x2, 3x3, 4x4, etc. This may require an interace redesin.
-    - [ ] Allow user to modify the colors used for the faces in realtime.
-    - [ ] Create some predefined color sets, things for color blindness, high contrast, grayscale, standard, pastel
+    - [x] Allow user to modify the colors used for the faces in realtime.
+    - [x] Create some predefined color sets, things for color blindness, high contrast, grayscale, standard, pastel
+    - [x] Allow user to save and load color sets
+    - [x] Allow user to import and export color sets

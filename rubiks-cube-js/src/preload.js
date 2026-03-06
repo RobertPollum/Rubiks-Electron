@@ -497,18 +497,23 @@ function updateCubeArray() {
 }
 
 const FACES = ['R', 'L', 'U', 'D', 'F', 'B'];
-const SCRAMBLE_MOVE_COUNT = 25;
+
+function getScrambleAmount() {
+    const amt = gameData.settings && gameData.settings.scrambleAmount;
+    return (typeof amt === 'number' && amt >= 1 && amt <= 1000) ? Math.floor(amt) : 25;
+}
 
 function scrambleCube() {
     if (isRotating || rotationQueue.length > 0) return;
     
     clearMoveHistory();
     isScrambling = true;
-    scrambleMoveCount = SCRAMBLE_MOVE_COUNT;
+    const scrambleCount = getScrambleAmount();
+    scrambleMoveCount = scrambleCount;
     updateCubeStateUI('scrambled');
     
     let lastFace = null;
-    for (let i = 0; i < SCRAMBLE_MOVE_COUNT; i++) {
+    for (let i = 0; i < scrambleCount; i++) {
         let face;
         do {
             face = FACES[Math.floor(Math.random() * FACES.length)];
@@ -520,7 +525,7 @@ function scrambleCube() {
     
     const infoElement = document.getElementById('info');
     if (infoElement) {
-        infoElement.textContent = `Scrambling with ${SCRAMBLE_MOVE_COUNT} random moves...`;
+        infoElement.textContent = `Scrambling with ${scrambleCount} random moves...`;
         infoElement.style.color = '#FF9800';
         infoElement.style.fontWeight = 'bold';
     }
@@ -860,6 +865,14 @@ function renderSettingsModal() {
     html += '</div></div>';
 
     html += '<div class="settings-section">';
+    html += '<h4>Scramble Amount</h4>';
+    html += '<p class="settings-hint">Number of random moves when scrambling the cube (1–1000).</p>';
+    html += '<div class="scramble-amount-row">';
+    html += `<input type="number" id="scramble-amount-input" min="1" max="1000" value="${getScrambleAmount()}">`;
+    html += '<button id="scramble-amount-save" class="settings-action-btn">Save</button>';
+    html += '</div></div>';
+
+    html += '<div class="settings-section">';
     html += '<h4>Import / Export</h4>';
     html += '<p class="settings-hint">Share color schemes as JSON files.</p>';
     html += '<div class="import-export-row">';
@@ -936,6 +949,28 @@ function renderSettingsModal() {
         });
         nameInput.addEventListener('keyup', (e) => e.stopPropagation());
         nameInput.addEventListener('keypress', (e) => e.stopPropagation());
+    }
+
+    // Scramble amount
+    const scrambleInput = container.querySelector('#scramble-amount-input');
+    const scrambleSave = container.querySelector('#scramble-amount-save');
+    if (scrambleInput && scrambleSave) {
+        const applyScrambleAmount = () => {
+            let val = parseInt(scrambleInput.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 1000) val = 1000;
+            scrambleInput.value = val;
+            gameData.settings = gameData.settings || {};
+            gameData.settings.scrambleAmount = val;
+            saveData(gameData);
+        };
+        scrambleSave.addEventListener('click', applyScrambleAmount);
+        scrambleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') applyScrambleAmount();
+            e.stopPropagation();
+        });
+        scrambleInput.addEventListener('keyup', (e) => e.stopPropagation());
+        scrambleInput.addEventListener('keypress', (e) => e.stopPropagation());
     }
 
     // Export / Import

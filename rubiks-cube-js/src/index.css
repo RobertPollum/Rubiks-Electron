@@ -502,6 +502,36 @@ body {
   color: #777;
 }
 
+/* Scramble Amount Row */
+.scramble-amount-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#scramble-amount-input {
+  width: 80px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #ddd;
+  font-family: inherit;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+#scramble-amount-input:focus {
+  outline: none;
+  border-color: #7C4DFF;
+}
+
+#scramble-amount-input::-webkit-inner-spin-button,
+#scramble-amount-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
 /* Import / Export Row */
 .import-export-row {
   display: flex;
