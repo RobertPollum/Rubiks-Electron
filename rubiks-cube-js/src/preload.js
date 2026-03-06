@@ -138,6 +138,11 @@ let moveHistory = [];
 let isScrambling = false;
 let scrambleMoveCount = 0;
 let cubeState = 'solved'; // 'solved' | 'scrambled' | 'solving'
+let lastScrambleMoves = [];
+
+// Replay state
+let isReplaying = false;
+let replayMoveCount = 0;
 
 const FACE_NORMALS = [
     new THREE.Vector3(1, 0, 0),   // material 0: +X
@@ -322,6 +327,35 @@ function onRotationComplete(face, clockwise) {
             isScrambling = false;
             updateCubeStateUI('scrambled');
             persistGameState();
+            updateReplayButton();
+        }
+        return;
+    }
+
+    if (isReplaying) {
+        replayMoveCount--;
+        const total = rotationQueue.length + replayMoveCount + 1;
+        const done = total - replayMoveCount;
+        const infoElement = document.getElementById('info');
+        if (infoElement) {
+            infoElement.textContent = `Replaying move ${done} of ${total}...`;
+            infoElement.style.color = '#00897B';
+            infoElement.style.fontWeight = 'bold';
+        }
+        if (replayMoveCount <= 0 && rotationQueue.length === 0) {
+            isReplaying = false;
+            setActionButtonsEnabled(true);
+            const info = document.getElementById('info');
+            if (info) {
+                info.textContent = 'Replay complete!';
+                info.style.color = '#4CAF50';
+                info.style.fontWeight = 'bold';
+                setTimeout(() => {
+                    info.textContent = 'Ready for next move';
+                    info.style.color = '#333';
+                    info.style.fontWeight = 'normal';
+                }, 2000);
+            }
         }
         return;
     }
@@ -345,6 +379,7 @@ function onRotationComplete(face, clockwise) {
     }
 
     persistGameState();
+    updateReplayButton();
 }
 
 // Function to get cubes belonging to a specific face
@@ -507,10 +542,12 @@ function scrambleCube() {
     if (isRotating || rotationQueue.length > 0) return;
     
     clearMoveHistory();
+    lastScrambleMoves = [];
     isScrambling = true;
     const scrambleCount = getScrambleAmount();
     scrambleMoveCount = scrambleCount;
     updateCubeStateUI('scrambled');
+    updateReplayButton();
     
     let lastFace = null;
     for (let i = 0; i < scrambleCount; i++) {
@@ -520,6 +557,7 @@ function scrambleCube() {
         } while (face === lastFace);
         lastFace = face;
         const clockwise = Math.random() < 0.5;
+        lastScrambleMoves.push({ face, clockwise });
         rotateFace(face, clockwise);
     }
     
@@ -584,10 +622,12 @@ function resetCube() {
     ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
     
     clearMoveHistory();
+    lastScrambleMoves = [];
     isScrambling = false;
     scrambleMoveCount = 0;
     updateCubeStateUI('solved');
     persistGameState();
+    updateReplayButton();
     
     const infoElement = document.getElementById('info');
     if (infoElement) {
@@ -598,6 +638,103 @@ function resetCube() {
             infoElement.textContent = 'Ready for next move';
             infoElement.style.color = '#333';
         }, 1500);
+    }
+}
+
+function parseNotationToMove(notation) {
+    const isPrime = notation.endsWith("'");
+    const face = isPrime ? notation.slice(0, -1) : notation;
+    return { face, clockwise: !isPrime };
+}
+
+function updateReplayButton() {
+    const btn = document.getElementById('replayBtn');
+    if (!btn) return;
+    btn.disabled = moveHistory.length === 0 || isScrambling || isReplaying;
+}
+
+function setActionButtonsEnabled(enabled) {
+    const ids = ['scrambleBtn', 'resetBtn', 'replayBtn', 'settingsBtn'];
+    ids.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = !enabled;
+    });
+    if (enabled) updateReplayButton();
+}
+
+function replayCube() {
+    if (moveHistory.length === 0 || isRotating || isReplaying || isScrambling) return;
+
+    const savedMoveHistory = [...moveHistory];
+    const savedScrambleMoves = [...lastScrambleMoves];
+
+    setActionButtonsEnabled(false);
+
+    // Remove all existing cubes from the scene
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube) {
+                    scene.remove(cube);
+                    if (cube.geometry) cube.geometry.dispose();
+                    if (Array.isArray(cube.material)) {
+                        cube.material.forEach(m => m.dispose());
+                    } else if (cube.material) {
+                        cube.material.dispose();
+                    }
+                }
+            }
+        }
+    }
+
+    // Regenerate a fresh solved cube
+    ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
+    rotationQueue = [];
+    currentRotation = null;
+    isRotating = false;
+
+    // Fast-replay scramble moves first, then animate user moves
+    isScrambling = true;
+    scrambleMoveCount = savedScrambleMoves.length;
+
+    const startUserMoveReplay = () => {
+        isReplaying = true;
+        replayMoveCount = savedMoveHistory.length;
+
+        const infoElement = document.getElementById('info');
+        if (infoElement) {
+            infoElement.textContent = `Replaying ${savedMoveHistory.length} moves...`;
+            infoElement.style.color = '#00897B';
+            infoElement.style.fontWeight = 'bold';
+        }
+
+        for (const move of savedMoveHistory) {
+            const { face, clockwise } = parseNotationToMove(move.notation);
+            rotateFace(face, clockwise);
+        }
+    };
+
+    if (savedScrambleMoves.length > 0) {
+        for (const move of savedScrambleMoves) {
+            rotateFace(move.face, move.clockwise);
+        }
+        // Wait for scramble to finish, then start user move replay
+        const waitForScramble = setInterval(() => {
+            if (!isScrambling && !isRotating && rotationQueue.length === 0) {
+                clearInterval(waitForScramble);
+                // Restore state references without re-recording
+                moveHistory = savedMoveHistory;
+                lastScrambleMoves = savedScrambleMoves;
+                startUserMoveReplay();
+            }
+        }, 50);
+    } else {
+        isScrambling = false;
+        scrambleMoveCount = 0;
+        moveHistory = savedMoveHistory;
+        lastScrambleMoves = savedScrambleMoves;
+        startUserMoveReplay();
     }
 }
 
@@ -986,6 +1123,7 @@ document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') closeSettings();
         return;
     }
+    if (isReplaying) return;
     const key = event.key.toLowerCase();
     const clockwise = !event.shiftKey;
     
@@ -1132,6 +1270,9 @@ window.addEventListener("DOMContentLoaded", () => {
    document.getElementById('resetBtn').addEventListener('click', () => {
        resetCube();
    });
+   document.getElementById('replayBtn').addEventListener('click', () => {
+       replayCube();
+   });
    document.getElementById('settingsBtn').addEventListener('click', () => {
        openSettings();
    });
@@ -1164,4 +1305,5 @@ window.addEventListener("DOMContentLoaded", () => {
    } else {
        updateCubeStateUI('solved');
    }
+   updateReplayButton();
 });
