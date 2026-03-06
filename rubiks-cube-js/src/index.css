@@ -440,3 +440,70 @@ body {
   background: rgba(255,255,255,0.15);
   color: #fff;
 }
+
+/* User Preset Wrapper */
+.user-preset-wrapper {
+  position: relative;
+}
+
+.preset-delete-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e53935;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.user-preset-wrapper:hover .preset-delete-btn {
+  opacity: 1;
+}
+
+.preset-delete-btn:hover {
+  background: #c62828;
+}
+
+/* Save Preset Row */
+.save-preset-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#preset-name-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #ddd;
+  font-family: inherit;
+}
+
+#preset-name-input:focus {
+  outline: none;
+  border-color: #7C4DFF;
+}
+
+#preset-name-input::placeholder {
+  color: #777;
+}
+
+/* Import / Export Row */
+.import-export-row {
+  display: flex;
+  gap: 8px;
+}

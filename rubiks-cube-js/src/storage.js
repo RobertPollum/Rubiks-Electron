@@ -14,7 +14,8 @@ const DEFAULT_DATA = {
     },
     settings: {
         theme: 'standard',
-        customColors: null
+        customColors: null,
+        userPresets: []
     }
 };
 

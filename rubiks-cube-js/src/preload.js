@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { generateCube3dArray } from './cube';
-import { THEMES, FACE_LABELS, getThemeColors, hexToInt, DEFAULT_THEME } from './themes';
+import { THEMES, FACE_LABELS, getThemeColors, hexToInt, DEFAULT_THEME, isValidColorScheme, createPresetExport, parsePresetImport } from './themes';
 
 const scene = new THREE.Scene()
 const adjustmentFactor = .4;
@@ -79,18 +79,26 @@ scene.add(light)
 // // scene.add(cube6);
 // // scene.add(cube7);
 // // scene.add(cube8);
-// // scene.add(cube9);
-
 // Load persisted data early so getActiveColors() works before cube generation
 let gameData = loadData();
 let sessionSolves = gameData.solves || [];
+
+function getUserPresets() {
+    return (gameData.settings && gameData.settings.userPresets) || [];
+}
 
 function getActiveColors() {
     const settings = gameData.settings || {};
     if (settings.customColors && Array.isArray(settings.customColors) && settings.customColors.length === 6) {
         return settings.customColors;
     }
-    return getThemeColors(settings.theme || DEFAULT_THEME);
+    const themeId = settings.theme || DEFAULT_THEME;
+    if (themeId.startsWith('user_')) {
+        const presets = getUserPresets();
+        const preset = presets.find(p => p.id === themeId);
+        if (preset && isValidColorScheme(preset.colors)) return [...preset.colors];
+    }
+    return getThemeColors(themeId);
 }
 
 let ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
@@ -644,7 +652,14 @@ function applyTheme(themeId) {
     gameData.settings = gameData.settings || {};
     gameData.settings.theme = themeId;
     gameData.settings.customColors = null;
-    const colors = getThemeColors(themeId);
+    let colors;
+    if (themeId.startsWith('user_')) {
+        const presets = getUserPresets();
+        const preset = presets.find(p => p.id === themeId);
+        colors = (preset && isValidColorScheme(preset.colors)) ? [...preset.colors] : getThemeColors(DEFAULT_THEME);
+    } else {
+        colors = getThemeColors(themeId);
+    }
     applyColorsToExistingCube(colors);
     saveData(gameData);
     renderSettingsModal();
@@ -677,6 +692,100 @@ function closeSettings() {
     }
 }
 
+function savePreset(name) {
+    if (!name || !name.trim()) return;
+    gameData.settings = gameData.settings || {};
+    if (!Array.isArray(gameData.settings.userPresets)) {
+        gameData.settings.userPresets = [];
+    }
+    const id = 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const colors = getActiveColors();
+    gameData.settings.userPresets.push({
+        id,
+        name: name.trim().slice(0, 50),
+        description: 'User preset: ' + name.trim(),
+        colors: [...colors],
+        createdAt: new Date().toISOString()
+    });
+    gameData.settings.theme = id;
+    gameData.settings.customColors = null;
+    saveData(gameData);
+    renderSettingsModal();
+}
+
+function deletePreset(presetId) {
+    if (!presetId || !presetId.startsWith('user_')) return;
+    gameData.settings = gameData.settings || {};
+    if (!Array.isArray(gameData.settings.userPresets)) return;
+    gameData.settings.userPresets = gameData.settings.userPresets.filter(p => p.id !== presetId);
+    if (gameData.settings.theme === presetId) {
+        gameData.settings.theme = DEFAULT_THEME;
+        applyColorsToExistingCube(getThemeColors(DEFAULT_THEME));
+    }
+    saveData(gameData);
+    renderSettingsModal();
+}
+
+function exportColorScheme() {
+    const currentColors = getActiveColors();
+    const currentTheme = (gameData.settings && gameData.settings.theme) || DEFAULT_THEME;
+    let name = 'Custom';
+    if (currentTheme.startsWith('user_')) {
+        const preset = getUserPresets().find(p => p.id === currentTheme);
+        if (preset) name = preset.name;
+    } else if (THEMES[currentTheme]) {
+        name = THEMES[currentTheme].name;
+    }
+    const exportData = createPresetExport(name, currentColors);
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rubiks-theme-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importColorScheme() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const parsed = parsePresetImport(ev.target.result);
+            if (!parsed) {
+                alert('Invalid color scheme file. Expected a JSON file with a name and 6 hex colors.');
+                return;
+            }
+            gameData.settings = gameData.settings || {};
+            if (!Array.isArray(gameData.settings.userPresets)) {
+                gameData.settings.userPresets = [];
+            }
+            const id = 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+            gameData.settings.userPresets.push({
+                id,
+                name: parsed.name,
+                description: parsed.description,
+                colors: parsed.colors,
+                createdAt: new Date().toISOString()
+            });
+            gameData.settings.theme = id;
+            gameData.settings.customColors = null;
+            applyColorsToExistingCube(parsed.colors);
+            saveData(gameData);
+            renderSettingsModal();
+        };
+        reader.readAsText(file);
+    });
+    input.click();
+}
+
 function renderSettingsModal() {
     const container = document.getElementById('settings-content');
     if (!container) return;
@@ -684,6 +793,7 @@ function renderSettingsModal() {
     const currentTheme = (gameData.settings && gameData.settings.theme) || DEFAULT_THEME;
     const currentColors = getActiveColors();
     const isCustom = gameData.settings && gameData.settings.customColors && Array.isArray(gameData.settings.customColors);
+    const userPresets = getUserPresets();
 
     let html = '<div class="settings-section">';
     html += '<h4>Color Theme</h4>';
@@ -700,6 +810,27 @@ function renderSettingsModal() {
         html += `</button>`;
     }
     html += '</div></div>';
+
+    if (userPresets.length > 0) {
+        html += '<div class="settings-section">';
+        html += '<h4>Your Presets</h4>';
+        html += '<div class="theme-grid">';
+        for (const preset of userPresets) {
+            const isActive = !isCustom && currentTheme === preset.id;
+            html += `<div class="user-preset-wrapper">`;
+            html += `<button class="theme-btn ${isActive ? 'active' : ''}" data-theme="${preset.id}" title="${preset.description}">`;
+            html += `<div class="theme-preview">`;
+            preset.colors.forEach(c => {
+                html += `<span class="theme-swatch" style="background:${c}"></span>`;
+            });
+            html += `</div>`;
+            html += `<span class="theme-name">${preset.name}</span>`;
+            html += `</button>`;
+            html += `<button class="preset-delete-btn" data-preset-id="${preset.id}" title="Delete preset">&times;</button>`;
+            html += `</div>`;
+        }
+        html += '</div></div>';
+    }
 
     html += '<div class="settings-section">';
     html += '<h4>Custom Face Colors</h4>';
@@ -721,14 +852,43 @@ function renderSettingsModal() {
     }
     html += '</div>';
 
+    html += '<div class="settings-section">';
+    html += '<h4>Save as Preset</h4>';
+    html += '<div class="save-preset-row">';
+    html += '<input type="text" id="preset-name-input" placeholder="Preset name..." maxlength="50" spellcheck="false">';
+    html += '<button id="save-preset-btn" class="settings-action-btn">Save</button>';
+    html += '</div></div>';
+
+    html += '<div class="settings-section">';
+    html += '<h4>Import / Export</h4>';
+    html += '<p class="settings-hint">Share color schemes as JSON files.</p>';
+    html += '<div class="import-export-row">';
+    html += '<button id="export-btn" class="settings-action-btn">Export Current</button>';
+    html += '<button id="import-btn" class="settings-action-btn">Import from File</button>';
+    html += '</div></div>';
+
     container.innerHTML = html;
 
+    // Theme buttons (built-in + user)
     container.querySelectorAll('.theme-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             applyTheme(btn.dataset.theme);
         });
     });
 
+    // Delete user preset
+    container.querySelectorAll('.preset-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const presetId = btn.dataset.presetId;
+            const preset = userPresets.find(p => p.id === presetId);
+            if (preset && confirm(`Delete preset "${preset.name}"?`)) {
+                deletePreset(presetId);
+            }
+        });
+    });
+
+    // Face color pickers
     container.querySelectorAll('.face-color-picker').forEach(picker => {
         picker.addEventListener('input', (e) => {
             const faceIdx = parseInt(e.target.dataset.face);
@@ -739,6 +899,7 @@ function renderSettingsModal() {
         });
     });
 
+    // Face color hex inputs
     container.querySelectorAll('.face-color-hex').forEach(hexInput => {
         hexInput.addEventListener('change', (e) => {
             const faceIdx = parseInt(e.target.dataset.face);
@@ -754,12 +915,34 @@ function renderSettingsModal() {
         });
     });
 
+    // Reset to theme
     const resetBtn = container.querySelector('#reset-to-theme-btn');
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
             applyTheme(currentTheme);
         });
     }
+
+    // Save preset
+    const saveBtn = container.querySelector('#save-preset-btn');
+    const nameInput = container.querySelector('#preset-name-input');
+    if (saveBtn && nameInput) {
+        saveBtn.addEventListener('click', () => {
+            savePreset(nameInput.value);
+        });
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') savePreset(nameInput.value);
+            e.stopPropagation();
+        });
+        nameInput.addEventListener('keyup', (e) => e.stopPropagation());
+        nameInput.addEventListener('keypress', (e) => e.stopPropagation());
+    }
+
+    // Export / Import
+    const exportBtn = container.querySelector('#export-btn');
+    if (exportBtn) exportBtn.addEventListener('click', exportColorScheme);
+    const importBtn = container.querySelector('#import-btn');
+    if (importBtn) importBtn.addEventListener('click', importColorScheme);
 }
 
 // Keyboard controls for cube rotations

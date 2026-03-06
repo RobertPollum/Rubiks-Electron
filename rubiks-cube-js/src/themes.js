@@ -50,3 +50,32 @@ export function getThemeColors(themeId) {
 export function hexToInt(hex) {
     return parseInt(hex.replace('#', ''), 16);
 }
+
+export function isValidColorScheme(colors) {
+    if (!Array.isArray(colors) || colors.length !== 6) return false;
+    return colors.every(c => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c));
+}
+
+export function createPresetExport(name, colors, description) {
+    return {
+        name,
+        description: description || `Custom preset: ${name}`,
+        colors: [...colors],
+        exportVersion: 1,
+        exportDate: new Date().toISOString()
+    };
+}
+
+export function parsePresetImport(json) {
+    try {
+        const data = typeof json === 'string' ? JSON.parse(json) : json;
+        if (!data.name || !isValidColorScheme(data.colors)) return null;
+        return {
+            name: String(data.name).slice(0, 50),
+            description: String(data.description || `Imported: ${data.name}`).slice(0, 120),
+            colors: data.colors.map(c => c.toUpperCase())
+        };
+    } catch {
+        return null;
+    }
+}
