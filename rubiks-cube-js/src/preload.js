@@ -326,6 +326,9 @@ function restoreCubeState(savedCubies) {
 }
 
 function onRotationComplete(face, clockwise) {
+    if (currentRotation && currentRotation.isCubeRotation) return;
+    if (face && face.startsWith('_cube_')) return;
+
     if (isScrambling) {
         scrambleMoveCount--;
         if (scrambleMoveCount <= 0) {
@@ -474,6 +477,52 @@ function rotateFace(face, clockwise = true) {
         targetAngle: clockwise ? rotationAngle : -rotationAngle,
         currentAngle: 0,
         axis: getRotationAxis(face)
+    };
+}
+
+// Function to rotate the entire cube (x, y, z rotations)
+function rotateCube(axis, clockwise = true) {
+    if (isRotating) {
+        rotationQueue.push({ face: '_cube_' + axis, clockwise, isCubeRotation: true });
+        return;
+    }
+
+    isRotating = true;
+    const allCubes = [];
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                allCubes.push(ThreeDCubeArray[z][y][x]);
+            }
+        }
+    }
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    allCubes.forEach(cube => {
+        const worldPosition = new THREE.Vector3();
+        cube.getWorldPosition(worldPosition);
+        scene.remove(cube);
+        group.add(cube);
+        group.worldToLocal(worldPosition);
+        cube.position.copy(worldPosition);
+    });
+
+    const axisMap = {
+        'x': new THREE.Vector3(1, 0, 0),
+        'y': new THREE.Vector3(0, 1, 0),
+        'z': new THREE.Vector3(0, 0, 1)
+    };
+
+    currentRotation = {
+        group: group,
+        cubes: allCubes,
+        face: '_cube_' + axis,
+        targetAngle: clockwise ? rotationAngle : -rotationAngle,
+        currentAngle: 0,
+        axis: axisMap[axis] || axisMap['y'],
+        isCubeRotation: true
     };
 }
 
@@ -1178,6 +1227,18 @@ document.addEventListener('keydown', (event) => {
             rotateFace('B', clockwise);
             showRotationFeedback('Back', clockwise);
             break;
+        case 'x':
+            rotateCube('x', clockwise);
+            showRotationFeedback('Cube X', clockwise);
+            break;
+        case 'y':
+            rotateCube('y', clockwise);
+            showRotationFeedback('Cube Y', clockwise);
+            break;
+        case 'z':
+            rotateCube('z', clockwise);
+            showRotationFeedback('Cube Z', clockwise);
+            break;
         case ' ':
             event.preventDefault();
             resetCamera();
@@ -1239,7 +1300,12 @@ function render() {
             // Process next rotation in queue
             if (rotationQueue.length > 0) {
                 const nextRotation = rotationQueue.shift();
-                rotateFace(nextRotation.face, nextRotation.clockwise);
+                if (nextRotation.isCubeRotation) {
+                    const cubeAxis = nextRotation.face.replace('_cube_', '');
+                    rotateCube(cubeAxis, nextRotation.clockwise);
+                } else {
+                    rotateFace(nextRotation.face, nextRotation.clockwise);
+                }
             }
         }
     }
