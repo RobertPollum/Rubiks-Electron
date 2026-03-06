@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { generateCube3dArray } from './cube';
 import { THEMES, FACE_LABELS, getThemeColors, hexToInt, DEFAULT_THEME, isValidColorScheme, createPresetExport, parsePresetImport } from './themes';
+import { ALGORITHMS, getAlgorithmById, getAlgorithmCategories, parseAlgorithmMoves } from './algorithms';
 
 const scene = new THREE.Scene()
 const adjustmentFactor = .4;
@@ -708,7 +709,7 @@ function updateReplayButton() {
 }
 
 function setActionButtonsEnabled(enabled) {
-    const ids = ['scrambleBtn', 'resetBtn', 'replayBtn', 'settingsBtn'];
+    const ids = ['scrambleBtn', 'resetBtn', 'replayBtn', 'settingsBtn', 'watchAlgorithmBtn'];
     ids.forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = !enabled;
@@ -789,6 +790,122 @@ function replayCube() {
         moveHistory = savedMoveHistory;
         lastScrambleMoves = savedScrambleMoves;
         startUserMoveReplay();
+    }
+}
+
+function populateAlgorithmSelect() {
+    const select = document.getElementById('algorithm-select');
+    if (!select) return;
+    select.innerHTML = '';
+    const categories = getAlgorithmCategories();
+    for (const cat of categories) {
+        const group = document.createElement('optgroup');
+        group.label = cat;
+        for (const alg of ALGORITHMS.filter(a => a.category === cat)) {
+            const opt = document.createElement('option');
+            opt.value = alg.id;
+            opt.textContent = alg.name;
+            group.appendChild(opt);
+        }
+        select.appendChild(group);
+    }
+    updateAlgorithmDesc();
+}
+
+function updateAlgorithmDesc() {
+    const select = document.getElementById('algorithm-select');
+    const desc = document.getElementById('algorithm-desc');
+    if (!select || !desc) return;
+    const alg = getAlgorithmById(select.value);
+    if (alg) {
+        desc.textContent = alg.description;
+    } else {
+        desc.textContent = '';
+    }
+}
+
+function runAlgorithm(algorithmId) {
+    const alg = getAlgorithmById(algorithmId);
+    if (!alg || isRotating || isReplaying || isScrambling) return;
+
+    const setupMoves = parseAlgorithmMoves(alg.setup);
+    const algMoves = parseAlgorithmMoves(alg.moves);
+    if (algMoves.length === 0) return;
+
+    // Forfeit current game
+    clearMoveHistory();
+    lastScrambleMoves = [];
+    updateCubeStateUI('solved');
+
+    setActionButtonsEnabled(false);
+    const watchBtn = document.getElementById('watchAlgorithmBtn');
+    if (watchBtn) watchBtn.disabled = true;
+
+    // Remove all existing cubes from the scene
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                const cube = ThreeDCubeArray[z][y][x];
+                if (cube) {
+                    scene.remove(cube);
+                    if (cube.geometry) cube.geometry.dispose();
+                    if (Array.isArray(cube.material)) {
+                        cube.material.forEach(m => m.dispose());
+                    } else if (cube.material) {
+                        cube.material.dispose();
+                    }
+                }
+            }
+        }
+    }
+
+    // Regenerate a fresh solved cube
+    ThreeDCubeArray = generateCube3dArray(3, scene, getActiveColors());
+    rotationQueue = [];
+    currentRotation = null;
+    isRotating = false;
+
+    const infoElement = document.getElementById('info');
+
+    if (setupMoves.length > 0) {
+        // Fast-apply setup moves as scramble
+        isScrambling = true;
+        scrambleMoveCount = setupMoves.length;
+
+        if (infoElement) {
+            infoElement.textContent = `Setting up ${alg.name}...`;
+            infoElement.style.color = '#FF9800';
+            infoElement.style.fontWeight = 'bold';
+        }
+
+        for (const move of setupMoves) {
+            rotateFace(move.face, move.clockwise);
+        }
+
+        const waitForSetup = setInterval(() => {
+            if (!isScrambling && !isRotating && rotationQueue.length === 0) {
+                clearInterval(waitForSetup);
+                startAlgorithmReplay(alg, algMoves);
+            }
+        }, 50);
+    } else {
+        startAlgorithmReplay(alg, algMoves);
+    }
+}
+
+function startAlgorithmReplay(alg, algMoves) {
+    isReplaying = true;
+    replayMoveCount = algMoves.length;
+
+    const infoElement = document.getElementById('info');
+    if (infoElement) {
+        infoElement.textContent = `Playing ${alg.name}: ${alg.moves}`;
+        infoElement.style.color = '#00897B';
+        infoElement.style.fontWeight = 'bold';
+    }
+
+    for (const move of algMoves) {
+        rotateFace(move.face, move.clockwise);
     }
 }
 
@@ -1378,6 +1495,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
    renderSolveList();
    renderStats();
+   populateAlgorithmSelect();
+   document.getElementById('algorithm-select').addEventListener('change', updateAlgorithmDesc);
+   document.getElementById('watchAlgorithmBtn').addEventListener('click', () => {
+       const select = document.getElementById('algorithm-select');
+       if (select && select.value) runAlgorithm(select.value);
+   });
 
    const saved = gameData.currentGame;
    if (saved && saved.cubies && saved.cubeState !== 'solved') {
