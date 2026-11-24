@@ -69,9 +69,74 @@
           <h2>Settings</h2>
           <button id="settings-close">&times;</button>
         </div>
-        <div id="settings-content"></div>
+        <div id="settings-content">
+          <div class="settings-section">
+            <h4>Color Theme</h4>
+            <div class="theme-grid" id="builtin-themes"></div>
+          </div>
+
+          <div class="settings-section" id="user-presets-section" hidden>
+            <h4>Your Presets</h4>
+            <div class="theme-grid" id="user-presets"></div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Custom Face Colors</h4>
+            <p class="settings-hint">Click a color to customize individual faces. Editing any color switches to custom mode.</p>
+            <div class="face-colors" id="face-colors"></div>
+            <button id="reset-to-theme-btn" class="settings-action-btn" hidden></button>
+          </div>
+
+          <div class="settings-section">
+            <h4>Save as Preset</h4>
+            <div class="save-preset-row">
+              <input type="text" id="preset-name-input" placeholder="Preset name..." maxlength="50" spellcheck="false">
+              <button id="save-preset-btn" class="settings-action-btn">Save</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Scramble Amount</h4>
+            <p class="settings-hint">Number of random moves when scrambling the cube (1–1000).</p>
+            <div class="scramble-amount-row">
+              <input type="number" id="scramble-amount-input" min="1" max="1000">
+              <button id="scramble-amount-save" class="settings-action-btn">Save</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Replay Speed</h4>
+            <p class="settings-hint">Controls how fast moves animate during replay.</p>
+            <div class="replay-speed-row">
+              <input type="range" id="replay-speed-slider" min="0.25" max="3" step="0.25">
+              <span id="replay-speed-label"></span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Import / Export</h4>
+            <p class="settings-hint">Share color schemes as JSON files.</p>
+            <div class="import-export-row">
+              <button id="export-btn" class="settings-action-btn">Export Current</button>
+              <button id="import-btn" class="settings-action-btn">Import from File</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
+
+    <!-- Filled in by ui/settingsModal.js -->
+    <template id="theme-button-template">
+      <button class="theme-btn"><div class="theme-preview"></div><span class="theme-name"></span></button>
+    </template>
+    <template id="face-color-row-template">
+      <div class="face-color-row">
+        <label></label>
+        <div class="color-input-group">
+          <input type="color" class="face-color-picker">
+          <input type="text" class="face-color-hex" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+    </template>
   </body>
-  <script type="text/javascript" src="./renderer.js"></script>
 </html>

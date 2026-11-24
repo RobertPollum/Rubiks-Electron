@@ -1,9 +1,13 @@
 // Settings modal: colour themes, user presets, per-face colours,
 // scramble amount, replay speed, and theme import/export.
+//
+// The fixed layout lives in index.html. This file wires its controls once
+// and fills in the parts that change (theme buttons, presets, colour values)
+// on each render. Text is always set with textContent, so names from
+// imported files can never become markup.
 
 import { THEMES, FACE_LABELS, isValidHexColor, createPresetExport, parsePresetImport } from '../core/themes';
-import { clampScrambleAmountInput } from '../core/settings';
-import { escapeHtml as esc } from './html';
+import { clampScrambleAmountInput, isUserPresetId } from '../core/settings';
 
 /**
  * @param {Object} deps
@@ -12,29 +16,123 @@ import { escapeHtml as esc } from './html';
  * @param {{ downloadJson: Function, pickTextFile: Function }} deps.files
  */
 export function createSettingsModal({ settings, onColorsChanged, files }, doc = document) {
-    const modal = doc.getElementById('settings-modal');
-    const container = doc.getElementById('settings-content');
+    const $ = id => doc.getElementById(id);
+    const modal = $('settings-modal');
+    const builtinThemes = $('builtin-themes');
+    const userPresetsSection = $('user-presets-section');
+    const userPresets = $('user-presets');
+    const resetToThemeBtn = $('reset-to-theme-btn');
+    const presetNameInput = $('preset-name-input');
+    const scrambleInput = $('scramble-amount-input');
+    const replaySlider = $('replay-speed-slider');
+    const replayLabel = $('replay-speed-label');
     let open = false;
 
-    // Keep typing in text fields from triggering cube shortcuts.
-    function isolateKeys(input, onEnter) {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') onEnter();
-            e.stopPropagation();
-        });
-        input.addEventListener('keyup', (e) => e.stopPropagation());
-        input.addEventListener('keypress', (e) => e.stopPropagation());
+    // ---- Building blocks ---------------------------------------------------
+
+    function themeButton(id, theme) {
+        const btn = $('theme-button-template').content.firstElementChild.cloneNode(true);
+        btn.dataset.theme = id;
+        btn.title = theme.description || '';
+        const preview = btn.querySelector('.theme-preview');
+        for (const color of theme.colors) {
+            const swatch = doc.createElement('span');
+            swatch.className = 'theme-swatch';
+            swatch.style.background = color;
+            preview.appendChild(swatch);
+        }
+        btn.querySelector('.theme-name').textContent = theme.name;
+        return btn;
     }
+
+    function presetEntry(preset) {
+        const wrapper = doc.createElement('div');
+        wrapper.className = 'user-preset-wrapper';
+        wrapper.appendChild(themeButton(preset.id, preset));
+        const del = doc.createElement('button');
+        del.className = 'preset-delete-btn';
+        del.dataset.presetId = preset.id;
+        del.title = 'Delete preset';
+        del.textContent = '×';
+        wrapper.appendChild(del);
+        return wrapper;
+    }
+
+    // One row per face, built once; render() only updates the values.
+    const faceRows = FACE_LABELS.map((label, i) => {
+        const row = $('face-color-row-template').content.firstElementChild.cloneNode(true);
+        row.querySelector('label').textContent = label;
+        const picker = row.querySelector('.face-color-picker');
+        const hex = row.querySelector('.face-color-hex');
+        picker.dataset.face = hex.dataset.face = String(i);
+        $('face-colors').appendChild(row);
+        return { picker, hex };
+    });
+
+    // ---- Render ------------------------------------------------------------
+
+    function render() {
+        const currentTheme = settings.getThemeId();
+        const isCustom = settings.isCustom();
+        const presets = settings.getUserPresets();
+        const colors = settings.getActiveColors();
+
+        builtinThemes.replaceChildren(...Object.entries(THEMES).map(([id, theme]) => themeButton(id, theme)));
+        userPresets.replaceChildren(...presets.map(presetEntry));
+        userPresetsSection.hidden = presets.length === 0;
+
+        for (const btn of modal.querySelectorAll('.theme-btn')) {
+            btn.classList.toggle('active', !isCustom && btn.dataset.theme === currentTheme);
+        }
+
+        faceRows.forEach(({ picker, hex }, i) => {
+            picker.value = hex.value = colors[i];
+        });
+
+        resetToThemeBtn.hidden = !isCustom;
+        resetToThemeBtn.textContent = `Reset to ${THEMES[currentTheme]?.name || 'Standard'} theme`;
+
+        scrambleInput.value = settings.getScrambleAmount();
+        replaySlider.value = settings.getReplaySpeed();
+        replayLabel.textContent = `${settings.getReplaySpeed()}x`;
+    }
+
+    // ---- Actions -------------------------------------------------------------
 
     function selectTheme(themeId) {
         onColorsChanged(settings.selectTheme(themeId));
         render();
     }
 
+    function setFaceColor(faceIndex, hex) {
+        onColorsChanged(settings.setFaceColor(faceIndex, hex));
+        faceRows[faceIndex].picker.value = faceRows[faceIndex].hex.value = hex;
+        resetToThemeBtn.hidden = false;
+        for (const btn of modal.querySelectorAll('.theme-btn.active')) btn.classList.remove('active');
+    }
+
+    function deletePreset(presetId) {
+        const preset = settings.getUserPresets().find(p => p.id === presetId);
+        if (!preset || !confirm(`Delete preset "${preset.name}"?`)) return;
+        const fallbackColors = settings.deletePreset(presetId);
+        if (fallbackColors) onColorsChanged(fallbackColors);
+        render();
+    }
+
+    function savePreset() {
+        if (settings.savePreset(presetNameInput.value)) render();
+    }
+
+    function saveScrambleAmount() {
+        const val = clampScrambleAmountInput(scrambleInput.value);
+        scrambleInput.value = val;
+        settings.setScrambleAmount(val);
+    }
+
     function exportColorScheme() {
         const themeId = settings.getThemeId();
         let name = 'Custom';
-        if (themeId.startsWith('user_')) {
+        if (isUserPresetId(themeId)) {
             const preset = settings.getUserPresets().find(p => p.id === themeId);
             if (preset) name = preset.name;
         } else if (THEMES[themeId]) {
@@ -45,8 +143,7 @@ export function createSettingsModal({ settings, onColorsChanged, files }, doc = 
     }
 
     async function importColorScheme() {
-        const text = await files.pickTextFile('.json');
-        const parsed = parsePresetImport(text);
+        const parsed = parsePresetImport(await files.pickTextFile('.json'));
         if (!parsed) {
             alert('Invalid color scheme file. Expected a JSON file with a name and 6 hex colors.');
             return;
@@ -55,218 +152,61 @@ export function createSettingsModal({ settings, onColorsChanged, files }, doc = 
         render();
     }
 
-    function themeButton(id, theme, isActive) {
-        let html = `<button class="theme-btn ${isActive ? 'active' : ''}" data-theme="${esc(id)}" title="${esc(theme.description)}">`;
-        html += `<div class="theme-preview">`;
-        theme.colors.forEach(c => {
-            html += `<span class="theme-swatch" style="background:${esc(c)}"></span>`;
+    // ---- Wiring (once) -------------------------------------------------------
+
+    // Typing in text fields must not trigger cube shortcuts.
+    function isolateKeys(input, onEnter) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') onEnter();
+            e.stopPropagation();
         });
-        html += `</div>`;
-        html += `<span class="theme-name">${esc(theme.name)}</span>`;
-        html += `</button>`;
-        return html;
+        input.addEventListener('keyup', (e) => e.stopPropagation());
+        input.addEventListener('keypress', (e) => e.stopPropagation());
     }
 
-    function buildHtml() {
-        const currentTheme = settings.getThemeId();
-        const currentColors = settings.getActiveColors();
-        const isCustom = settings.isCustom();
-        const userPresets = settings.getUserPresets();
+    // Theme and preset buttons are re-created on render, so listen on the modal.
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) return hide(); // click on the backdrop
+        const del = e.target.closest('.preset-delete-btn');
+        if (del) return deletePreset(del.dataset.presetId);
+        const themeBtn = e.target.closest('.theme-btn');
+        if (themeBtn) return selectTheme(themeBtn.dataset.theme);
+    });
 
-        let html = '<div class="settings-section">';
-        html += '<h4>Color Theme</h4>';
-        html += '<div class="theme-grid">';
-        for (const [id, theme] of Object.entries(THEMES)) {
-            html += themeButton(id, theme, !isCustom && currentTheme === id);
-        }
-        html += '</div></div>';
-
-        if (userPresets.length > 0) {
-            html += '<div class="settings-section">';
-            html += '<h4>Your Presets</h4>';
-            html += '<div class="theme-grid">';
-            for (const preset of userPresets) {
-                html += `<div class="user-preset-wrapper">`;
-                html += themeButton(preset.id, preset, !isCustom && currentTheme === preset.id);
-                html += `<button class="preset-delete-btn" data-preset-id="${esc(preset.id)}" title="Delete preset">&times;</button>`;
-                html += `</div>`;
-            }
-            html += '</div></div>';
-        }
-
-        html += '<div class="settings-section">';
-        html += '<h4>Custom Face Colors</h4>';
-        html += '<p class="settings-hint">Click a color to customize individual faces. Editing any color switches to custom mode.</p>';
-        html += '<div class="face-colors">';
-        FACE_LABELS.forEach((label, i) => {
-            const color = currentColors[i];
-            html += `<div class="face-color-row">`;
-            html += `<label>${esc(label)}</label>`;
-            html += `<div class="color-input-group">`;
-            html += `<input type="color" class="face-color-picker" data-face="${i}" value="${esc(color)}">`;
-            html += `<input type="text" class="face-color-hex" data-face="${i}" value="${esc(color)}" maxlength="7" spellcheck="false">`;
-            html += `</div>`;
-            html += `</div>`;
+    faceRows.forEach(({ picker, hex }, i) => {
+        picker.addEventListener('input', () => setFaceColor(i, picker.value));
+        hex.addEventListener('change', () => {
+            let value = hex.value.trim();
+            if (!value.startsWith('#')) value = '#' + value;
+            if (isValidHexColor(value)) setFaceColor(i, value);
+            else hex.value = settings.getActiveColors()[i];
         });
-        html += '</div>';
-        if (isCustom) {
-            html += `<button id="reset-to-theme-btn" class="settings-action-btn">Reset to ${esc(THEMES[currentTheme]?.name || 'Standard')} theme</button>`;
-        }
-        html += '</div>';
+    });
 
-        html += '<div class="settings-section">';
-        html += '<h4>Save as Preset</h4>';
-        html += '<div class="save-preset-row">';
-        html += '<input type="text" id="preset-name-input" placeholder="Preset name..." maxlength="50" spellcheck="false">';
-        html += '<button id="save-preset-btn" class="settings-action-btn">Save</button>';
-        html += '</div></div>';
-
-        html += '<div class="settings-section">';
-        html += '<h4>Scramble Amount</h4>';
-        html += '<p class="settings-hint">Number of random moves when scrambling the cube (1–1000).</p>';
-        html += '<div class="scramble-amount-row">';
-        html += `<input type="number" id="scramble-amount-input" min="1" max="1000" value="${settings.getScrambleAmount()}">`;
-        html += '<button id="scramble-amount-save" class="settings-action-btn">Save</button>';
-        html += '</div></div>';
-
-        html += '<div class="settings-section">';
-        html += '<h4>Replay Speed</h4>';
-        html += '<p class="settings-hint">Controls how fast moves animate during replay.</p>';
-        html += '<div class="replay-speed-row">';
-        html += `<input type="range" id="replay-speed-slider" min="0.25" max="3" step="0.25" value="${settings.getReplaySpeed()}">`;
-        html += `<span id="replay-speed-label">${settings.getReplaySpeed()}x</span>`;
-        html += '</div></div>';
-
-        html += '<div class="settings-section">';
-        html += '<h4>Import / Export</h4>';
-        html += '<p class="settings-hint">Share color schemes as JSON files.</p>';
-        html += '<div class="import-export-row">';
-        html += '<button id="export-btn" class="settings-action-btn">Export Current</button>';
-        html += '<button id="import-btn" class="settings-action-btn">Import from File</button>';
-        html += '</div></div>';
-
-        return html;
-    }
-
-    function bindControls() {
-        const currentTheme = settings.getThemeId();
-        const userPresets = settings.getUserPresets();
-
-        // Theme buttons (built-in + user)
-        container.querySelectorAll('.theme-btn').forEach(btn => {
-            btn.addEventListener('click', () => selectTheme(btn.dataset.theme));
-        });
-
-        // Delete user preset
-        container.querySelectorAll('.preset-delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const presetId = btn.dataset.presetId;
-                const preset = userPresets.find(p => p.id === presetId);
-                if (preset && confirm(`Delete preset "${preset.name}"?`)) {
-                    const fallbackColors = settings.deletePreset(presetId);
-                    if (fallbackColors) onColorsChanged(fallbackColors);
-                    render();
-                }
-            });
-        });
-
-        // Face colour pickers
-        container.querySelectorAll('.face-color-picker').forEach(picker => {
-            picker.addEventListener('input', (e) => {
-                const faceIdx = parseInt(e.target.dataset.face);
-                const hex = e.target.value;
-                onColorsChanged(settings.setFaceColor(faceIdx, hex));
-                const hexInput = container.querySelector(`.face-color-hex[data-face="${faceIdx}"]`);
-                if (hexInput) hexInput.value = hex;
-            });
-        });
-
-        // Face colour hex inputs
-        container.querySelectorAll('.face-color-hex').forEach(hexInput => {
-            hexInput.addEventListener('change', (e) => {
-                const faceIdx = parseInt(e.target.dataset.face);
-                let hex = e.target.value.trim();
-                if (!hex.startsWith('#')) hex = '#' + hex;
-                if (isValidHexColor(hex)) {
-                    onColorsChanged(settings.setFaceColor(faceIdx, hex));
-                    const picker = container.querySelector(`.face-color-picker[data-face="${faceIdx}"]`);
-                    if (picker) picker.value = hex;
-                } else {
-                    e.target.value = settings.getActiveColors()[faceIdx];
-                }
-            });
-        });
-
-        // Reset to theme
-        const resetBtn = container.querySelector('#reset-to-theme-btn');
-        if (resetBtn) resetBtn.addEventListener('click', () => selectTheme(currentTheme));
-
-        // Save preset
-        const saveBtn = container.querySelector('#save-preset-btn');
-        const nameInput = container.querySelector('#preset-name-input');
-        if (saveBtn && nameInput) {
-            const savePreset = () => {
-                if (settings.savePreset(nameInput.value)) render();
-            };
-            saveBtn.addEventListener('click', savePreset);
-            isolateKeys(nameInput, savePreset);
-        }
-
-        // Scramble amount
-        const scrambleInput = container.querySelector('#scramble-amount-input');
-        const scrambleSave = container.querySelector('#scramble-amount-save');
-        if (scrambleInput && scrambleSave) {
-            const applyScrambleAmount = () => {
-                const val = clampScrambleAmountInput(scrambleInput.value);
-                scrambleInput.value = val;
-                settings.setScrambleAmount(val);
-            };
-            scrambleSave.addEventListener('click', applyScrambleAmount);
-            isolateKeys(scrambleInput, applyScrambleAmount);
-        }
-
-        // Replay speed
-        const replaySlider = container.querySelector('#replay-speed-slider');
-        const replayLabel = container.querySelector('#replay-speed-label');
-        if (replaySlider && replayLabel) {
-            replaySlider.addEventListener('input', (e) => {
-                const val = parseFloat(e.target.value);
-                replayLabel.textContent = val + 'x';
-                settings.setReplaySpeed(val);
-            });
-        }
-
-        // Export / Import
-        const exportBtn = container.querySelector('#export-btn');
-        if (exportBtn) exportBtn.addEventListener('click', exportColorScheme);
-        const importBtn = container.querySelector('#import-btn');
-        if (importBtn) importBtn.addEventListener('click', importColorScheme);
-    }
-
-    function render() {
-        if (!container) return;
-        container.innerHTML = buildHtml();
-        bindControls();
-    }
+    resetToThemeBtn.addEventListener('click', () => selectTheme(settings.getThemeId()));
+    $('save-preset-btn').addEventListener('click', savePreset);
+    isolateKeys(presetNameInput, savePreset);
+    $('scramble-amount-save').addEventListener('click', saveScrambleAmount);
+    isolateKeys(scrambleInput, saveScrambleAmount);
+    replaySlider.addEventListener('input', () => {
+        const val = parseFloat(replaySlider.value);
+        replayLabel.textContent = `${val}x`;
+        settings.setReplaySpeed(val);
+    });
+    $('export-btn').addEventListener('click', exportColorScheme);
+    $('import-btn').addEventListener('click', importColorScheme);
+    $('settings-close').addEventListener('click', hide);
 
     function show() {
         open = true;
-        if (modal) {
-            modal.classList.add('visible');
-            render();
-        }
+        modal.classList.add('visible');
+        render();
     }
 
     function hide() {
         open = false;
-        if (modal) modal.classList.remove('visible');
+        modal.classList.remove('visible');
     }
-
-    doc.getElementById('settings-close').addEventListener('click', hide);
-    modal.addEventListener('click', (e) => {
-        if (e.target.id === 'settings-modal') hide();
-    });
 
     return {
         open: show,
