@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" xml:lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Digital Shenanigans</title>
+    <meta content="text/html; charset=utf-8" />
+  </head>
+  <body>
+    <div id="app-layout">
+      <div id="main-content">
+        <h1>🧩 Rubik's Cube Simulator</h1>
+        <p>Welcome to your interactive Rubik's Cube!</p>
+        <div id="controls">
+          <h3>Controls:</h3>
+          <ul>
+            <li><strong>R</strong> - Rotate Right face clockwise</li>
+            <li><strong>Shift+R</strong> - Rotate Right face counter-clockwise</li>
+            <li><strong>L</strong> - Rotate Left face clockwise</li>
+            <li><strong>Shift+L</strong> - Rotate Left face counter-clockwise</li>
+            <li><strong>U</strong> - Rotate Up face clockwise</li>
+            <li><strong>Shift+U</strong> - Rotate Up face counter-clockwise</li>
+            <li><strong>D</strong> - Rotate Down face clockwise</li>
+            <li><strong>Shift+D</strong> - Rotate Down face counter-clockwise</li>
+            <li><strong>F</strong> - Rotate Front face clockwise</li>
+            <li><strong>Shift+F</strong> - Rotate Front face counter-clockwise</li>
+            <li><strong>B</strong> - Rotate Back face clockwise</li>
+            <li><strong>Shift+B</strong> - Rotate Back face counter-clockwise</li>
+            <li><strong>2</strong>–<strong>7</strong>, then a face key - Turn an inner layer (e.g. 2 then R turns the layer behind R)</li>
+            <li><strong>X</strong> - Rotate entire cube on X axis (like turning in hand)</li>
+            <li><strong>Y</strong> - Rotate entire cube on Y axis</li>
+            <li><strong>Z</strong> - Rotate entire cube on Z axis</li>
+            <li><strong>Shift+X/Y/Z</strong> - Reverse cube rotation</li>
+            <li><strong>Space</strong> - Reset camera to default view</li>
+          </ul>
+        </div>
+        <div id="actions">
+          <button id="scrambleBtn">🎲 Scramble</button>
+          <button id="resetBtn">🔄 Reset</button>
+          <button id="replayBtn" disabled>🔁 Replay</button>
+          <button id="settingsBtn">⚙️ Settings</button>
+        </div>
+        <p id="info"></p>
+      </div>
+      <div id="sidebar">
+        <h3>Move History</h3>
+        <div id="sidebar-status">
+          <span id="move-count">Moves: 0</span>
+          <span id="cube-state" class="state-solved">Solved</span>
+        </div>
+        <div id="move-list"></div>
+        <div id="stats-section">
+          <h4>All-Time Stats</h4>
+          <div id="stats-display"></div>
+        </div>
+        <div id="session-history">
+          <h4>Solve History</h4>
+          <div id="solve-list"></div>
+        </div>
+        <div id="algorithm-section">
+          <h4>Algorithm Viewer</h4>
+          <select id="algorithm-select"></select>
+          <p id="algorithm-desc"></p>
+          <button id="watchAlgorithmBtn" class="algo-btn">Watch Algorithm</button>
+        </div>
+      </div>
+    </div>
+    <div id="settings-modal">
+      <div id="settings-panel">
+        <div id="settings-header">
+          <h2>Settings</h2>
+          <button id="settings-close">&times;</button>
+        </div>
+        <div id="settings-content">
+          <div class="settings-section" id="account-section">
+            <h4>Account &amp; Sync</h4>
+            <p class="settings-hint" id="account-status"></p>
+            <div class="account-row">
+              <button id="sign-in-btn" class="settings-action-btn"></button>
+              <button id="sync-now-btn" class="settings-action-btn">Sync now</button>
+              <button id="sign-out-btn" class="settings-action-btn">Sign out</button>
+            </div>
+            <label class="sync-toggle" id="sync-toggle-row">
+              <input type="checkbox" id="sync-enabled"> Sync automatically on this device
+            </label>
+            <p class="settings-hint" id="sync-status" role="status"></p>
+          </div>
+
+          <div class="settings-section">
+            <h4>Color Theme</h4>
+            <div class="theme-grid" id="builtin-themes"></div>
+          </div>
+
+          <div class="settings-section" id="user-presets-section" hidden>
+            <h4>Your Presets</h4>
+            <div class="theme-grid" id="user-presets"></div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Custom Face Colors</h4>
+            <p class="settings-hint">Click a color to customize individual faces. Editing any color switches to custom mode.</p>
+            <div class="face-colors" id="face-colors"></div>
+            <button id="reset-to-theme-btn" class="settings-action-btn" hidden></button>
+          </div>
+
+          <div class="settings-section">
+            <h4>Save as Preset</h4>
+            <div class="save-preset-row">
+              <input type="text" id="preset-name-input" placeholder="Preset name..." maxlength="50" spellcheck="false">
+              <button id="save-preset-btn" class="settings-action-btn">Save</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Cube Size</h4>
+            <p class="settings-hint">Changing the size starts a new, solved cube.</p>
+            <select id="cube-size-select">
+              <option value="2">2 × 2 × 2</option>
+              <option value="3">3 × 3 × 3</option>
+              <option value="4">4 × 4 × 4</option>
+              <option value="5">5 × 5 × 5</option>
+              <option value="6">6 × 6 × 6</option>
+              <option value="7">7 × 7 × 7</option>
+            </select>
+          </div>
+
+          <div class="settings-section">
+            <h4>Scramble Amount</h4>
+            <p class="settings-hint">Number of random moves when scrambling the cube (1–1000).</p>
+            <div class="scramble-amount-row">
+              <input type="number" id="scramble-amount-input" min="1" max="1000">
+              <button id="scramble-amount-save" class="settings-action-btn">Save</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Replay Speed</h4>
+            <p class="settings-hint">Controls how fast moves animate during replay.</p>
+            <div class="replay-speed-row">
+              <input type="range" id="replay-speed-slider" min="0.25" max="3" step="0.25">
+              <span id="replay-speed-label"></span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Import / Export</h4>
+            <p class="settings-hint">Share color schemes as JSON files.</p>
+            <div class="import-export-row">
+              <button id="export-btn" class="settings-action-btn">Export Current</button>
+              <button id="import-btn" class="settings-action-btn">Import from File</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filled in by ui/settingsModal.js -->
+    <template id="theme-button-template">
+      <button class="theme-btn"><div class="theme-preview"></div><span class="theme-name"></span></button>
+    </template>
+    <template id="face-color-row-template">
+      <div class="face-color-row">
+        <label></label>
+        <div class="color-input-group">
+          <input type="color" class="face-color-picker">
+          <input type="text" class="face-color-hex" maxlength="7" spellcheck="false">
+        </div>
+      </div>
+    </template>
+    <script type="module" src="/src/renderer.ts"></script>
+  </body>
+</html>
