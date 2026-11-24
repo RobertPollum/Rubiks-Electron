@@ -3,6 +3,7 @@
 
 import { THEMES, FACE_LABELS, isValidHexColor, createPresetExport, parsePresetImport } from '../core/themes';
 import { clampScrambleAmountInput } from '../core/settings';
+import { escapeHtml as esc } from './html';
 
 /**
  * @param {Object} deps
@@ -55,13 +56,13 @@ export function createSettingsModal({ settings, onColorsChanged, files }, doc = 
     }
 
     function themeButton(id, theme, isActive) {
-        let html = `<button class="theme-btn ${isActive ? 'active' : ''}" data-theme="${id}" title="${theme.description}">`;
+        let html = `<button class="theme-btn ${isActive ? 'active' : ''}" data-theme="${esc(id)}" title="${esc(theme.description)}">`;
         html += `<div class="theme-preview">`;
         theme.colors.forEach(c => {
-            html += `<span class="theme-swatch" style="background:${c}"></span>`;
+            html += `<span class="theme-swatch" style="background:${esc(c)}"></span>`;
         });
         html += `</div>`;
-        html += `<span class="theme-name">${theme.name}</span>`;
+        html += `<span class="theme-name">${esc(theme.name)}</span>`;
         html += `</button>`;
         return html;
     }
@@ -87,7 +88,7 @@ export function createSettingsModal({ settings, onColorsChanged, files }, doc = 
             for (const preset of userPresets) {
                 html += `<div class="user-preset-wrapper">`;
                 html += themeButton(preset.id, preset, !isCustom && currentTheme === preset.id);
-                html += `<button class="preset-delete-btn" data-preset-id="${preset.id}" title="Delete preset">&times;</button>`;
+                html += `<button class="preset-delete-btn" data-preset-id="${esc(preset.id)}" title="Delete preset">&times;</button>`;
                 html += `</div>`;
             }
             html += '</div></div>';
@@ -100,16 +101,16 @@ export function createSettingsModal({ settings, onColorsChanged, files }, doc = 
         FACE_LABELS.forEach((label, i) => {
             const color = currentColors[i];
             html += `<div class="face-color-row">`;
-            html += `<label>${label}</label>`;
+            html += `<label>${esc(label)}</label>`;
             html += `<div class="color-input-group">`;
-            html += `<input type="color" class="face-color-picker" data-face="${i}" value="${color}">`;
-            html += `<input type="text" class="face-color-hex" data-face="${i}" value="${color}" maxlength="7" spellcheck="false">`;
+            html += `<input type="color" class="face-color-picker" data-face="${i}" value="${esc(color)}">`;
+            html += `<input type="text" class="face-color-hex" data-face="${i}" value="${esc(color)}" maxlength="7" spellcheck="false">`;
             html += `</div>`;
             html += `</div>`;
         });
         html += '</div>';
         if (isCustom) {
-            html += `<button id="reset-to-theme-btn" class="settings-action-btn">Reset to ${THEMES[currentTheme]?.name || 'Standard'} theme</button>`;
+            html += `<button id="reset-to-theme-btn" class="settings-action-btn">Reset to ${esc(THEMES[currentTheme]?.name || 'Standard')} theme</button>`;
         }
         html += '</div>';
 

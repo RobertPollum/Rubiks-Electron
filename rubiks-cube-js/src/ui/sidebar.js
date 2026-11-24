@@ -1,3 +1,5 @@
+import { escapeHtml as esc } from './html';
+
 // Sidebar: move history, cube state badge, stats, solve history,
 // plus enabling/disabling the main action buttons.
 
@@ -20,7 +22,7 @@ export function createSidebar(doc = document) {
             moveHistory.forEach((move, i) => {
                 const div = doc.createElement('div');
                 div.className = 'move-entry';
-                div.innerHTML = `<span class="move-num">${i + 1}.</span><span class="move-notation">${move.notation}</span>`;
+                div.innerHTML = `<span class="move-num">${i + 1}.</span><span class="move-notation">${esc(move.notation)}</span>`;
                 el.appendChild(div);
             });
             el.scrollTop = el.scrollHeight;
@@ -42,9 +44,9 @@ export function createSidebar(doc = document) {
         renderStats({ totalSolves, bestSolve, averageMoves }) {
             const el = $('stats-display');
             if (!el) return;
-            el.innerHTML = `<span>Total: <strong>${totalSolves}</strong></span>` +
-                `<span>Best: <strong>${bestSolve !== null ? bestSolve : '-'}</strong></span>` +
-                `<span>Avg: <strong>${averageMoves || '-'}</strong></span>`;
+            el.innerHTML = `<span>Total: <strong>${esc(totalSolves)}</strong></span>` +
+                `<span>Best: <strong>${esc(bestSolve !== null ? bestSolve : '-')}</strong></span>` +
+                `<span>Avg: <strong>${esc(averageMoves || '-')}</strong></span>`;
         },
 
         renderSolveList(solves) {
@@ -58,7 +60,7 @@ export function createSidebar(doc = document) {
             solves.slice().reverse().forEach(solve => {
                 const div = doc.createElement('div');
                 div.className = 'solve-entry';
-                div.innerHTML = `<span class="solve-moves">${solve.moves} moves</span> <span class="solve-time">${solve.timestamp} ${solve.date}</span>`;
+                div.innerHTML = `<span class="solve-moves">${esc(solve.moves)} moves</span> <span class="solve-time">${esc(solve.timestamp)} ${esc(solve.date)}</span>`;
                 el.appendChild(div);
             });
         },

@@ -1,12 +1,7 @@
 // The one-line status message under the controls (#info).
+// Colours live in index.css as .status-<tone> classes.
 
-const TONES = {
-    idle: '#333',
-    success: '#4CAF50',
-    info: '#2196F3',
-    warning: '#FF9800',
-    replay: '#00897B'
-};
+const TONES = ['idle', 'success', 'info', 'warning', 'replay'];
 
 export const READY_MESSAGE = 'Ready for next move';
 
@@ -15,8 +10,8 @@ export function createStatusBar(element) {
 
     function apply(text, tone, bold) {
         element.textContent = text;
-        element.style.color = TONES[tone] || TONES.idle;
-        element.style.fontWeight = bold ? 'bold' : 'normal';
+        element.className = `status-${TONES.includes(tone) ? tone : 'idle'}`;
+        element.classList.toggle('status-bold', bold);
     }
 
     return {

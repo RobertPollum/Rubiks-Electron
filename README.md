@@ -14,8 +14,8 @@ The code is split so that everything except `electron/` and `platform/` can run 
 
 | Folder | What lives there | May use |
 | --- | --- | --- |
-| `core/` | Pure rules and data: notation, scramble generation, themes, algorithms, settings rules, stats, saved-data shape | Nothing (no DOM, no three.js) |
-| `view/` | three.js scene, cubie meshes, turn animation (`CubeView`) | three.js, its own canvas |
+| `core/` | Pure rules and data: the cube model (`cubeModel.js`), notation, scramble, themes, algorithms, settings rules, stats, save format and migration. Unit tested (`npm test`) | Nothing (no DOM, no three.js) |
+| `view/` | three.js scene and turn animation (`CubeView`). Draws whatever cube state it is given | three.js, its own canvas |
 | `ui/` | Sidebar, status line, settings modal, algorithm panel, keyboard shortcuts | DOM |
 | `app/` | Game flow (`gameController`), settings store, and `bootstrap` which wires everything together | core, view, ui |
 | `platform/` | Storage adapters and file import/export. The only place web and Electron are allowed to differ | Browser / Electron bridge |
@@ -61,11 +61,13 @@ The code is split so that everything except `electron/` and `platform/` can run 
 # Roadmap
 
 1. ~~Move the game out of `preload.js` and separate concerns into folders.~~
-2. Switch the build to Vite (Electron Forge has a Vite plugin) so the same renderer also builds as a website.
-3. Convert `rubiks-cube-js` to TypeScript, starting with `core/`; retire `rubiks-cube-ts`.
-4. Add a pure cube model in `core/` (the cube's state currently lives in the three.js meshes), with unit tests.
-    - Fix turn directions: opposite faces currently turn the same world direction, so either R/U/F or L/D/B don't match standard notation.
-    - After a replay, the status goes back to "Scrambled" instead of "Solving".
-5. Publish the web build; add an Electron file-storage adapter over IPC.
-6. Accounts and cloud sync via an API storage adapter.
-7. Other cube sizes (2x2, 4x4, ...), built on the pure model.
+2. ~~Add a pure cube model in `core/` with unit tests (`npm test`); make turns awaitable.~~
+    - ~~Fix turn directions to match standard notation.~~
+    - ~~Fix replay (status after replay, replay after reloading the app).~~
+3. ~~Escape imported/saved text in the UI; make the status line readable.~~
+4. Shrink the settings modal (move fixed markup into `<template>`s in `index.html`).
+5. Switch the build to Vite (Electron Forge has a Vite plugin) so the same renderer also builds as a website.
+6. Convert `rubiks-cube-js` to TypeScript, starting with `core/`; retire `rubiks-cube-ts`.
+7. Publish the web build; add an Electron file-storage adapter over IPC.
+8. Accounts and cloud sync via an API storage adapter.
+9. Other cube sizes (2x2, 4x4, ...), built on the cube model.

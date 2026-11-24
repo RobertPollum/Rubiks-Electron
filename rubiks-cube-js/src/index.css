@@ -76,7 +76,16 @@ body {
 #info {
   font-size: 14px;
   min-height: 1.2em;
+  color: #B0B3C0;
 }
+
+/* Status line tones (set by ui/statusBar.js). All at least 4.5:1 on the page background. */
+#info.status-idle    { color: #B0B3C0; }
+#info.status-success { color: #4CAF50; }
+#info.status-info    { color: #42A5F5; }
+#info.status-warning { color: #FF9800; }
+#info.status-replay  { color: #26A69A; }
+#info.status-bold    { font-weight: bold; }
 
 /* Sidebar */
 #sidebar {
