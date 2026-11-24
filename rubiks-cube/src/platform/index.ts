@@ -1,10 +1,11 @@
 // Picks the platform services for wherever the app is running.
 //
-// Today both targets share the browser implementations. This is the single
-// place to branch when Electron gets file-based storage or native dialogs,
-// or the web build gets an account-backed API adapter.
+// Electron saves game data to a file (through the preload bridge); the web
+// build uses localStorage. This is the single place to branch for future
+// targets, e.g. an account-backed API adapter for the website.
 
 import { createLocalStorageAdapter } from './localStorageAdapter';
+import { createElectronFileAdapter } from './electronFileAdapter';
 import { downloadJson, pickTextFile } from './fileTransfer';
 import type { Platform } from './types';
 
@@ -26,7 +27,7 @@ export function describePlatform(): string {
 export function createPlatform(): Platform {
     return {
         kind: isElectron() ? 'electron' : 'web',
-        storage: createLocalStorageAdapter(),
+        storage: window.rubiksStorage ? createElectronFileAdapter(window.rubiksStorage) : createLocalStorageAdapter(),
         files: { downloadJson, pickTextFile },
         describe: describePlatform
     };

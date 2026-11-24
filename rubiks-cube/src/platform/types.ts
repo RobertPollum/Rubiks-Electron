@@ -40,9 +40,17 @@ export interface ElectronVersions {
     electron(): string;
 }
 
+/** File-backed storage the Electron preload exposes (see src/electron/fileStore.ts). */
+export interface ElectronStorage {
+    load(): Promise<unknown>;
+    save(data: GameData): Promise<void>;
+}
+
 declare global {
     interface Window {
         /** Only present in Electron (see src/electron/preload.ts). */
         versions?: ElectronVersions;
+        /** Only present in Electron (see src/electron/preload.ts). */
+        rubiksStorage?: ElectronStorage;
     }
 }

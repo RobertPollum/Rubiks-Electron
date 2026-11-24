@@ -23,6 +23,15 @@ From `rubiks-cube/`:
 
 The Electron app and the website are built from the same `index.html` and `src/renderer.ts`.
 
+## Continuous integration and the website
+
+`.github/workflows/web.yml` type-checks and runs the unit and browser tests on every push and pull request. Pushes to `main` also build the website and publish it to GitHub Pages. To turn publishing on, set **Settings > Pages > Source** to **GitHub Actions** once.
+
+## Where data is saved
+
+- **Website:** the browser's localStorage.
+- **Electron app:** `game-data.json` in the app's user-data folder (`~/.config/rubiks-cube-js/` on Linux, `%APPDATA%\rubiks-cube-js\` on Windows, `~/Library/Application Support/rubiks-cube-js/` on macOS). Data saved by older versions in localStorage is picked up automatically.
+
 ## How `rubiks-cube/src` is organised
 
 The code is split so that everything except `electron/` and `platform/` can run as a plain web page.
@@ -41,7 +50,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
 # Goals
 - [x] Get the basic electron application running
 - [x] Figure out including node modules within the application (bundled with webpack)
-    - [ ] Ideally use file storage for electron app (add an Electron storage adapter in `platform/`)
+    - [x] Use file storage for the Electron app (`game-data.json` in the app's user-data folder)
 - [x] Get a Three JS render running within the application
 - [x] Transform basic render into a 3x3x3 set of cubes
 - [x] Create a predefined matrix to then generate the 3x3x3 cube
@@ -62,7 +71,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
     - [x] Move the game out of the Electron preload script into the renderer
     - [x] Separate code into `core` / `view` / `ui` / `app` / `platform` / `electron`
     - [x] Create a storage adapter interface (`platform/types.ts`) so storage can be swapped
-    - [ ] Add a web build target and publish it (e.g. GitHub Pages)
+    - [x] Add a web build target and publish it (GitHub Pages, see below)
     - [ ] Add individual user log in that allows different people to access their cube data on the web
     - [ ] Data backup for an account if it's an electron application? IE story in Google Drive, Dropbox, Onedrive, Mega, etc...
 - [x] Storage for session to allow user to return and pick up where they left off when the application opens/closes
@@ -83,6 +92,6 @@ The code is split so that everything except `electron/` and `platform/` can run 
 4. ~~Shrink the settings modal (move fixed markup into `<template>`s in `index.html`).~~
 5. ~~Switch the build to Vite so the same renderer also builds as a website.~~
 6. ~~Convert to TypeScript and retire the old `rubiks-cube-ts` scaffold.~~
-7. Publish the web build; add an Electron file-storage adapter over IPC.
+7. ~~Publish the web build; add an Electron file-storage adapter over IPC.~~
 8. Accounts and cloud sync via an API storage adapter.
 9. Other cube sizes (2x2, 4x4, ...), built on the cube model.
