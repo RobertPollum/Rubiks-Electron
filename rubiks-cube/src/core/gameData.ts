@@ -32,7 +32,8 @@ export function createDefaultData(): GameData {
             customColors: null,
             userPresets: [],
             scrambleAmount: DEFAULT_SCRAMBLE_AMOUNT,
-            replaySpeed: DEFAULT_REPLAY_SPEED
+            replaySpeed: DEFAULT_REPLAY_SPEED,
+            cubeSize: 3
         }
     };
 }

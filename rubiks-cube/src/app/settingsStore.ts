@@ -5,7 +5,7 @@
 import { DEFAULT_THEME, getThemeColors } from '../core/themes';
 import {
     resolveActiveColors, resolveThemeColors, hasCustomColors, isUserPresetId,
-    normalizeScrambleAmount, normalizeReplaySpeed, createUserPreset
+    normalizeScrambleAmount, normalizeReplaySpeed, normalizeCubeSize, createUserPreset
 } from '../core/settings';
 import type { GameData, Palette, Settings, UserPreset, ColorTheme } from '../core/types';
 
@@ -33,6 +33,7 @@ export function createSettingsStore(gameData: GameData, save: () => void) {
         isCustom: (): boolean => hasCustomColors(gameData.settings || {}),
         getScrambleAmount: (): number => normalizeScrambleAmount(gameData.settings?.scrambleAmount),
         getReplaySpeed: (): number => normalizeReplaySpeed(gameData.settings?.replaySpeed),
+        getCubeSize: (): number => normalizeCubeSize(gameData.settings?.cubeSize),
 
         /** Switch to a built-in theme or user preset. Returns the new colours. */
         selectTheme(themeId: string): Palette {
@@ -107,6 +108,11 @@ export function createSettingsStore(gameData: GameData, save: () => void) {
 
         setReplaySpeed(value: number): void {
             settings().replaySpeed = value;
+            save();
+        },
+
+        setCubeSize(value: number): void {
+            settings().cubeSize = normalizeCubeSize(value);
             save();
         }
     };

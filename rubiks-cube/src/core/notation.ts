@@ -32,18 +32,32 @@ export function isCubeRotation(move: Move): boolean {
     return isAxis(move.face);
 }
 
-/** { face: 'R', clockwise: false } -> "R'" */
-export function formatMoveNotation({ face, clockwise }: Move): string {
-    return clockwise ? face : face + "'";
+/** Layer depth of a move (1 = outer face). */
+export function moveLayer(move: Move): number {
+    return move.layer ?? 1;
 }
 
-/** "R'" -> { face: 'R', clockwise: false }. Single quarter turns only; null if not a known move. */
+/** { face: 'R', clockwise: false } -> "R'";  { face: 'R', clockwise: true, layer: 2 } -> "2R" */
+export function formatMoveNotation(move: Move): string {
+    const layer = moveLayer(move);
+    return `${layer > 1 ? layer : ''}${move.face}${move.clockwise ? '' : "'"}`;
+}
+
+const NOTATION = /^([1-9]?)([RLUDFBxyz])(')?$/;
+
+/** "R'" -> { face: 'R', clockwise: false }; "2R" -> inner layer. Quarter turns only; null if not a known move. */
 export function parseNotationToMove(notation: unknown): Move | null {
     if (typeof notation !== 'string') return null;
-    const isPrime = notation.endsWith("'");
-    const face = isPrime ? notation.slice(0, -1) : notation;
+    const match = NOTATION.exec(notation);
+    if (!match) return null;
+    const [, layerText, face, prime] = match;
     if (!isFace(face) && !isAxis(face)) return null;
-    return { face, clockwise: !isPrime };
+    const move: Move = { face, clockwise: !prime };
+    if (layerText && layerText !== '1') {
+        if (isAxis(face)) return null; // whole-cube rotations have no layers
+        move.layer = Number(layerText);
+    }
+    return move;
 }
 
 /**
@@ -53,8 +67,9 @@ export function parseNotationToMove(notation: unknown): Move | null {
 export function parseAlgorithmMoves(moveString: string): Move[] {
     if (!moveString || !moveString.trim()) return [];
     return moveString.trim().split(/\s+/).flatMap(token => {
-        const move = parseNotationToMove(token.replace('2', ''));
+        const double = /2'?$/.test(token); // "U2" or "U2'" (but not the layer prefix in "2R")
+        const move = parseNotationToMove(double ? token.replace(/2('?)$/, '$1') : token);
         if (!move) return [];
-        return token.includes('2') ? [move, { ...move }] : [move];
+        return double ? [move, { ...move }] : [move];
     });
 }

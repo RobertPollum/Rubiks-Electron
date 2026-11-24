@@ -8,7 +8,7 @@
 // transforms instead; loadSavedGame() migrates those.
 
 import {
-    FACE_ORDER, FACE_NORMALS, findSlot, applyMoves, invertMoves, isSolved,
+    FACE_ORDER, FACE_NORMALS, findSlot, applyMoves, invertMoves, isSolved, cubeSizeOf, isMoveValidForSize,
     isValidState, serializeState, deserializeState
 } from './cubeModel';
 import { formatMoveNotation, parseNotationToMove, isCubeRotation } from './notation';
@@ -84,6 +84,8 @@ function loadCurrent(saved: Record<string, any>): LoadedGame | null {
     const start = deserializeState(saved.start);
     const moves = parseHistory(saved.moveHistory);
     if (!start || !moves) return null;
+    const size = cubeSizeOf(start);
+    if (!moves.every(m => isMoveValidForSize(m, size))) return null;
     const scramble = (Array.isArray(saved.scramble) ? saved.scramble : [])
         .map(parseNotationToMove)
         .filter((m: Move | null): m is Move => m !== null);
@@ -137,11 +139,12 @@ export function stateFromVersion1Cubies(cubies: unknown): CubeState | null {
     for (const cubie of cubies as Version1Cubie[]) {
         if (!cubie || !cubie.position || !cubie.quaternion) return null;
         const { x, y, z } = cubie.position;
-        const pos = [x, y, z].map(c => Math.round(c / V1_SPACING)) as Vec3;
-        if (pos.some(c => Math.abs(c) > 1)) return null;
+        const grid = [x, y, z].map(c => Math.round(c / V1_SPACING));
+        if (grid.some(c => Math.abs(c) > 1)) return null;
+        const pos = grid.map(c => c * 2) as Vec3; // model uses doubled coordinates (see cubeModel.ts)
         FACE_ORDER.forEach((face, colour) => {
             const facing = rotateByQuaternion(FACE_NORMALS[face], cubie.quaternion).map(Math.round) as Vec3;
-            const slot = findSlot(pos, facing);
+            const slot = findSlot(pos, facing, 3);
             if (slot >= 0) state[slot] = colour;
         });
     }

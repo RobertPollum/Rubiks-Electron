@@ -7,6 +7,7 @@ import {
     DEFAULT_REPLAY_SPEED, MIN_REPLAY_SPEED, MAX_REPLAY_SPEED
 } from './gameData';
 import type { Palette, Settings, UserPreset } from './types';
+import { DEFAULT_CUBE_SIZE, isValidCubeSize } from './cubeModel';
 
 export const USER_PRESET_PREFIX = 'user_';
 
@@ -50,6 +51,11 @@ export function clampScrambleAmountInput(value: string | number): number {
     if (isNaN(val) || val < MIN_SCRAMBLE_AMOUNT) val = MIN_SCRAMBLE_AMOUNT;
     if (val > MAX_SCRAMBLE_AMOUNT) val = MAX_SCRAMBLE_AMOUNT;
     return val;
+}
+
+/** Stored cube size, falling back to 3 if missing or unsupported. */
+export function normalizeCubeSize(value: unknown): number {
+    return isValidCubeSize(value) ? value : DEFAULT_CUBE_SIZE;
 }
 
 export function normalizeReplaySpeed(value: unknown): number {

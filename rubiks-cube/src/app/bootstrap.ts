@@ -31,6 +31,8 @@ export async function bootstrap(platform: Platform, doc: Document = document) {
     const settingsModal = createSettingsModal({
         settings,
         onColorsChanged: colors => view.setPalette(colors),
+        onCubeSizeChanged: size => game.setCubeSize(size),
+        hasProgress: game.hasProgress,
         files: platform.files
     }, doc);
 
@@ -52,6 +54,10 @@ export async function bootstrap(platform: Platform, doc: Document = document) {
         closeSettings: settingsModal.close,
         isInputLocked: game.isInputLocked,
         turn: game.turn,
+        onLayerSelected: layer => {
+            if (layer === null) status.ready();
+            else status.show(`Layer ${layer}: now press a face key (R, L, U, D, F, B)`, 'info');
+        },
         resetCamera: game.resetCamera
     }, doc);
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    SLOTS, FACE_ORDER, createSolvedState, applyMove, applyMoves, invertMoves,
+    getSlots, FACE_ORDER, maxLayer, createSolvedState, applyMove, applyMoves, invertMoves,
     isSolved, statesEqual, serializeState, deserializeState
 } from './cubeModel';
 import { parseAlgorithmMoves, parseNotationToMove } from './notation';
@@ -8,6 +8,7 @@ import type { Vec3 } from './cubeModel';
 import type { CubeState, Face, Move } from './types';
 
 const COLOR = Object.fromEntries(FACE_ORDER.map((f, i) => [f, i])) as Record<Face, number>;
+const SLOTS = getSlots(3);
 const solved = createSolvedState();
 const run = (notation: string) => applyMoves(solved, parseAlgorithmMoves(notation));
 const move = (n: string) => parseNotationToMove(n) as Move;
@@ -19,7 +20,7 @@ function stickers(state: CubeState, face: Face, where: (pos: Vec3) => boolean): 
 const all = (colours: number[], c: number) => colours.length > 0 && colours.every(x => x === c);
 
 describe('cube model', () => {
-    it('has 54 stickers, 9 per face', () => {
+    it('has 54 stickers, 9 per face (3x3x3)', () => {
         expect(SLOTS).toHaveLength(54);
         for (const face of FACE_ORDER) expect(SLOTS.filter(s => s.face === face)).toHaveLength(9);
         expect(isSolved(solved)).toBe(true);
@@ -28,23 +29,23 @@ describe('cube model', () => {
     describe('face turns follow standard notation', () => {
         it('R moves the front right column up', () => {
             const s = run('R');
-            expect(all(stickers(s, 'U', (p: Vec3) => p[0] === 1), COLOR.F)).toBe(true);
-            expect(all(stickers(s, 'F', (p: Vec3) => p[0] === 1), COLOR.D)).toBe(true);
+            expect(all(stickers(s, 'U', (p: Vec3) => p[0] > 0), COLOR.F)).toBe(true);
+            expect(all(stickers(s, 'F', (p: Vec3) => p[0] > 0), COLOR.D)).toBe(true);
         });
         it('L moves the front left column down', () => {
-            expect(all(stickers(run('L'), 'D', (p: Vec3) => p[0] === -1), COLOR.F)).toBe(true);
+            expect(all(stickers(run('L'), 'D', (p: Vec3) => p[0] < 0), COLOR.F)).toBe(true);
         });
         it('U brings the right face to the front', () => {
-            expect(all(stickers(run('U'), 'F', (p: Vec3) => p[1] === 1), COLOR.R)).toBe(true);
+            expect(all(stickers(run('U'), 'F', (p: Vec3) => p[1] > 0), COLOR.R)).toBe(true);
         });
         it('D brings the left face to the front', () => {
-            expect(all(stickers(run('D'), 'F', (p: Vec3) => p[1] === -1), COLOR.L)).toBe(true);
+            expect(all(stickers(run('D'), 'F', (p: Vec3) => p[1] < 0), COLOR.L)).toBe(true);
         });
         it('F moves the top row onto the right face', () => {
-            expect(all(stickers(run('F'), 'R', (p: Vec3) => p[2] === 1), COLOR.U)).toBe(true);
+            expect(all(stickers(run('F'), 'R', (p: Vec3) => p[2] > 0), COLOR.U)).toBe(true);
         });
         it('B moves the top row onto the left face', () => {
-            expect(all(stickers(run('B'), 'L', (p: Vec3) => p[2] === -1), COLOR.U)).toBe(true);
+            expect(all(stickers(run('B'), 'L', (p: Vec3) => p[2] < 0), COLOR.U)).toBe(true);
         });
         it("R' undoes R", () => {
             expect(statesEqual(applyMove(run('R'), move("R'")), solved)).toBe(true);
@@ -103,6 +104,54 @@ describe('cube model', () => {
             expect(deserializeState('0'.repeat(54))).toBeNull();
             expect(deserializeState('012')).toBeNull();
             expect(deserializeState(null)).toBeNull();
+        });
+    });
+
+    describe('other sizes', () => {
+        const runOn = (size: number, notation: string) => applyMoves(createSolvedState(size), parseAlgorithmMoves(notation));
+
+        it.each([2, 3, 4, 5, 6, 7])('a %i-cube has 6 x n x n stickers and starts solved', size => {
+            const state = createSolvedState(size);
+            expect(state).toHaveLength(6 * size * size);
+            expect(isSolved(state)).toBe(true);
+            expect(deserializeState(serializeState(state))).toEqual(state);
+        });
+
+        it('R on a 2x2 moves the front right column up', () => {
+            const s = runOn(2, 'R');
+            const slots = getSlots(2);
+            const u = slots.flatMap((sl, i) => (sl.face === 'U' && sl.pos[0] > 0 ? [s[i]] : []));
+            expect(u).toEqual([COLOR.F, COLOR.F]);
+        });
+
+        it('inner layers turn independently of the face (4x4)', () => {
+            const outer = runOn(4, 'R');
+            const inner = runOn(4, '2R');
+            expect(statesEqual(outer, inner)).toBe(false);
+            // 2R leaves the R face itself untouched
+            const slots = getSlots(4);
+            slots.forEach((sl, i) => { if (sl.face === 'R') expect(inner[i]).toBe(COLOR.R); });
+            expect(isSolved(runOn(4, '2R 2R 2R 2R'))).toBe(true);
+            expect(isSolved(runOn(4, "2R U 2F' 2U2 2U2 2F U' 2R'"))).toBe(true);
+        });
+
+        it("on a 3x3 the middle layer 2R is the slice between R and L (R 2R L' == x)", () => {
+            expect(statesEqual(run("R 2R L'"), run('x'))).toBe(true);
+        });
+
+        it('a full scramble and its inverse return to solved on big cubes', () => {
+            for (const size of [4, 5, 7]) {
+                const moves = parseAlgorithmMoves("R 2U' 3F B2 x 2L D' 2B y' 3R");
+                const valid = moves.filter(m => (m.layer ?? 1) <= maxLayer(size));
+                const scrambled = applyMoves(createSolvedState(size), valid);
+                expect(isSolved(scrambled)).toBe(false);
+                expect(isSolved(applyMoves(scrambled, invertMoves(valid)))).toBe(true);
+            }
+        });
+
+        it('rejects saved states of unsupported sizes', () => {
+            expect(deserializeState('0'.repeat(6))).toBeNull(); // 1x1
+            expect(deserializeState('012345'.repeat(64 / 6 * 6))).toBeNull();
         });
     });
 });

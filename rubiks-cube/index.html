@@ -25,6 +25,7 @@
             <li><strong>Shift+F</strong> - Rotate Front face counter-clockwise</li>
             <li><strong>B</strong> - Rotate Back face clockwise</li>
             <li><strong>Shift+B</strong> - Rotate Back face counter-clockwise</li>
+            <li><strong>2</strong>–<strong>7</strong>, then a face key - Turn an inner layer (e.g. 2 then R turns the layer behind R)</li>
             <li><strong>X</strong> - Rotate entire cube on X axis (like turning in hand)</li>
             <li><strong>Y</strong> - Rotate entire cube on Y axis</li>
             <li><strong>Z</strong> - Rotate entire cube on Z axis</li>
@@ -93,6 +94,19 @@
               <input type="text" id="preset-name-input" placeholder="Preset name..." maxlength="50" spellcheck="false">
               <button id="save-preset-btn" class="settings-action-btn">Save</button>
             </div>
+          </div>
+
+          <div class="settings-section">
+            <h4>Cube Size</h4>
+            <p class="settings-hint">Changing the size starts a new, solved cube.</p>
+            <select id="cube-size-select">
+              <option value="2">2 × 2 × 2</option>
+              <option value="3">3 × 3 × 3</option>
+              <option value="4">4 × 4 × 4</option>
+              <option value="5">5 × 5 × 5</option>
+              <option value="6">6 × 6 × 6</option>
+              <option value="7">7 × 7 × 7</option>
+            </select>
           </div>
 
           <div class="settings-section">

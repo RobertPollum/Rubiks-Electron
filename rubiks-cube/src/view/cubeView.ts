@@ -4,15 +4,14 @@
 // at a time. It holds no game rules: the game controller owns the real cube
 // state and decides which moves to play.
 //
-//   view.show(state)              draw a state immediately
+//   view.show(state)              draw a state immediately (any cube size)
 //   await view.animate(move)      animate a move, then draw the resulting state
 //   view.cancel()                 stop an animation in progress
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createSolvedState, applyMove, getMoveSpec } from '../core/cubeModel';
-import { createCubies, resetCubieTransforms, paintCubies, type Cubie } from './cubeMeshes';
-import type { Vec3 } from '../core/cubeModel';
+import { createSolvedState, applyMove, getMoveSpec, cubeSizeOf } from '../core/cubeModel';
+import { createCubies, disposeCubies, resetCubieTransforms, paintCubies, gridPos, type Cubie } from './cubeMeshes';
 import type { Axis, CubeState, Move, Palette } from '../core/types';
 
 interface Animation {
@@ -40,7 +39,8 @@ export class CubeView {
     private sizes: { width: number; height: number };
     private readonly scene: THREE.Scene;
     private readonly cubeRoot: THREE.Group;
-    private readonly cubies: Cubie[];
+    private cubies: Cubie[];
+    private size: number;
     private readonly camera: THREE.PerspectiveCamera;
     private readonly renderer: THREE.WebGLRenderer;
     private readonly controls: OrbitControls;
@@ -62,8 +62,9 @@ export class CubeView {
 
         this.cubeRoot = new THREE.Group();
         this.scene.add(this.cubeRoot);
-        this.cubies = createCubies(this.cubeRoot);
-        paintCubies(this.cubies, this.state, this.palette);
+        this.size = cubeSizeOf(this.state);
+        this.cubies = createCubies(this.cubeRoot, this.size);
+        paintCubies(this.cubies, this.state, this.palette, this.size);
 
         this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
         this.camera.position.copy(DEFAULT_CAMERA_POSITION);
@@ -99,14 +100,16 @@ export class CubeView {
     show(state: CubeState): void {
         this._finishAnimation(false);
         this.state = state;
+        const size = cubeSizeOf(state);
+        if (size !== this.size) this._rebuild(size);
         resetCubieTransforms(this.cubies, this.cubeRoot);
-        paintCubies(this.cubies, this.state, this.palette);
+        paintCubies(this.cubies, this.state, this.palette, this.size);
     }
 
     /** Change the six face colours. */
     setPalette(palette: Palette): void {
         this.palette = palette;
-        paintCubies(this.cubies, this.state, this.palette);
+        paintCubies(this.cubies, this.state, this.palette, this.size);
     }
 
     /**
@@ -116,12 +119,12 @@ export class CubeView {
      */
     animate(move: Move, speed: number | (() => number) = 1): Promise<boolean> {
         this._finishAnimation(false);
-        const { axis, direction, inLayer } = getMoveSpec(move);
+        const { axis, direction, inLayer } = getMoveSpec(move, this.size);
 
         const pivot = new THREE.Group();
         this.cubeRoot.add(pivot);
         for (const cubie of this.cubies) {
-            if (inLayer(cubie.userData.gridPos as Vec3)) pivot.add(cubie);
+            if (inLayer(gridPos(cubie))) pivot.add(cubie);
         }
 
         return new Promise<boolean>(resolve => {
@@ -160,6 +163,14 @@ export class CubeView {
 
     // ---- Internals -------------------------------------------------------
 
+    /** Replace the cubies for a different cube size, keeping the overall cube the same size on screen. */
+    private _rebuild(size: number): void {
+        disposeCubies(this.cubies);
+        this.size = size;
+        this.cubies = createCubies(this.cubeRoot, size);
+        this.cubeRoot.scale.setScalar(3 / size);
+    }
+
     private _windowSizes() {
         return {
             width: window.innerWidth * CANVAS_SCALE,
@@ -177,7 +188,7 @@ export class CubeView {
         if (completed) {
             this.state = applyMove(this.state, animation.move);
         }
-        paintCubies(this.cubies, this.state, this.palette);
+        paintCubies(this.cubies, this.state, this.palette, this.size);
         animation.resolve(completed);
     }
 

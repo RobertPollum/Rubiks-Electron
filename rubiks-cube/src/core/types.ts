@@ -7,14 +7,22 @@ export type Face = 'R' | 'L' | 'U' | 'D' | 'F' | 'B';
 /** An axis the whole cube can be rotated around. */
 export type Axis = 'x' | 'y' | 'z';
 
-/** A quarter turn of one face, or a quarter rotation of the whole cube. */
+/** A quarter turn of one face layer, or a quarter rotation of the whole cube. */
 export interface Move {
     face: Face | Axis;
     clockwise: boolean;
+    /**
+     * Which layer to turn, counted from `face`: 1 (default) is the outer
+     * face, 2 the layer behind it, and so on. Written "2R". Face turns only.
+     */
+    layer?: number;
 }
 
-/** 54 sticker colours (0-5), indexed by sticker slot. See core/cubeModel.ts. */
+/** Sticker colours (0-5), 6 x size x size of them, indexed by sticker slot. See core/cubeModel.ts. */
 export type CubeState = number[];
+
+export const MIN_CUBE_SIZE = 2;
+export const MAX_CUBE_SIZE = 7;
 
 /** Six hex colours ("#RRGGBB"), one per face in FACE_ORDER. */
 export type Palette = string[];
@@ -69,6 +77,8 @@ export interface Settings {
     userPresets: UserPreset[];
     scrambleAmount: number;
     replaySpeed: number;
+    /** Cubies per edge: 3 for a standard cube. */
+    cubeSize: number;
 }
 
 /** Everything the app persists. Saved data from older versions may differ (see loadSavedGame). */

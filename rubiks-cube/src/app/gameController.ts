@@ -10,7 +10,7 @@
 //     mode = 'idle';
 
 import { formatMoveNotation, parseNotationToMove, parseAlgorithmMoves, isCubeRotation } from '../core/notation';
-import { createSolvedState, applyMove, isSolved, statesEqual } from '../core/cubeModel';
+import { createSolvedState, applyMove, isSolved, statesEqual, cubeSizeOf, isMoveValidForSize } from '../core/cubeModel';
 import { createSavedGame, loadSavedGame, countMoves } from '../core/savedGame';
 import { generateScramble } from '../core/scramble';
 import { computeStats, createSolveRecord } from '../core/stats';
@@ -46,7 +46,7 @@ export function createGameController({ gameData, save, settings, sidebar, status
 
     // ---- State -----------------------------------------------------------
 
-    let cube: CubeState = createSolvedState(); // the real cube
+    let cube: CubeState = createSolvedState(settings.getCubeSize()); // the real cube
     let start: CubeState = cube;               // cube at the start of this attempt (after the scramble)
     let scramble: Move[] = [];                 // moves that produced `start`, if known
     let moveHistory: MoveRecord[] = [];        // moves since `start`
@@ -171,9 +171,14 @@ export function createGameController({ gameData, save, settings, sidebar, status
     /** A turn from the keyboard. Ignored during scrambles and playback. */
     function turn(move: Move, label: string): void {
         if (mode !== 'idle') return;
+        const size = cubeSizeOf(cube);
+        if (!isMoveValidForSize(move, size)) {
+            status.show(`A ${size}x${size}x${size} cube has no layer ${move.layer} to turn`, 'warning', { revertAfter: 1500 });
+            return;
+        }
         playMoves([move], { onMove: onPlayerMove });
         const direction = move.clockwise ? 'clockwise' : 'counter-clockwise';
-        status.show(`Rotating ${label} face ${direction}...`, 'success', { revertAfter: 1000 });
+        status.show(`Rotating ${label} ${direction}...`, 'success', { revertAfter: 1000 });
     }
 
     // ---- Actions -------------------------------------------------------------
@@ -181,7 +186,7 @@ export function createGameController({ gameData, save, settings, sidebar, status
     async function scrambleCube() {
         if (isBusy()) return;
         const count = settings.getScrambleAmount();
-        const moves = generateScramble(count);
+        const moves = generateScramble(count, Math.random, cubeSizeOf(cube));
 
         mode = 'scrambling';
         setMoveHistory([]);
@@ -201,11 +206,28 @@ export function createGameController({ gameData, save, settings, sidebar, status
     function reset() {
         cancelMoves();
         mode = 'idle';
-        showCube(createSolvedState());
+        showCube(createSolvedState(settings.getCubeSize()));
         startAttempt([], 'solved');
         setActionButtonsEnabled(true);
         persist();
         status.show('Cube reset to solved state!', 'info', { revertAfter: 1500 });
+    }
+
+    /** True if there's an attempt in progress that changing the cube would throw away. */
+    function hasProgress(): boolean {
+        return moveHistory.length > 0 || !isSolved(cube);
+    }
+
+    /** Switch to a cube of a different size, starting from solved. */
+    function setCubeSize(size: number): void {
+        cancelMoves();
+        mode = 'idle';
+        settings.setCubeSize(size);
+        showCube(createSolvedState(settings.getCubeSize()));
+        startAttempt([], 'solved');
+        setActionButtonsEnabled(true);
+        persist();
+        status.show(`Now playing a ${size}x${size}x${size} cube`, 'info', { revertAfter: 2000 });
     }
 
     /** Jump back to the start of this attempt and animate every move since. */
@@ -246,7 +268,7 @@ export function createGameController({ gameData, save, settings, sidebar, status
 
         mode = 'playback';
         setActionButtonsEnabled(false);
-        showCube(createSolvedState());
+        showCube(createSolvedState(cubeSizeOf(cube)));
         startAttempt([], 'solved');
 
         let finished = true;
@@ -275,6 +297,7 @@ export function createGameController({ gameData, save, settings, sidebar, status
     function resumeSavedGame() {
         const saved = loadSavedGame(gameData.currentGame);
         if (saved && (saved.moveHistory.length > 0 || !isSolved(saved.cube))) {
+            if (cubeSizeOf(saved.cube) !== settings.getCubeSize()) settings.setCubeSize(cubeSizeOf(saved.cube));
             showCube(saved.cube);
             start = saved.start;
             scramble = saved.scramble;
@@ -283,6 +306,7 @@ export function createGameController({ gameData, save, settings, sidebar, status
             if (saved.migrated) persist(); // upgrade old saves to the current format
             if (cubeState !== 'solved') status.show('Resumed previous game', 'warning', { bold: false });
         } else {
+            showCube(createSolvedState(settings.getCubeSize()));
             setCubeState('solved');
         }
         updateReplayButton();
@@ -299,6 +323,9 @@ export function createGameController({ gameData, save, settings, sidebar, status
         runAlgorithm,
         resetCamera,
         resumeSavedGame,
+        setCubeSize,
+        hasProgress,
+        getCubeSize: () => cubeSizeOf(cube),
         renderHistory() {
             sidebar.renderSolveList(solves);
             sidebar.renderStats(gameData.stats);

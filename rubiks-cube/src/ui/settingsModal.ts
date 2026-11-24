@@ -16,12 +16,16 @@ export interface SettingsModalDeps {
     settings: SettingsStore;
     /** Repaint the cube with new colours. */
     onColorsChanged: (colors: Palette) => void;
+    /** Switch to a new, solved cube of this size. */
+    onCubeSizeChanged: (size: number) => void;
+    /** Whether there's an attempt in progress that a size change would discard. */
+    hasProgress: () => boolean;
     files: FileTransfer;
 }
 
 export type SettingsModal = ReturnType<typeof createSettingsModal>;
 
-export function createSettingsModal({ settings, onColorsChanged, files }: SettingsModalDeps, doc: Document = document) {
+export function createSettingsModal({ settings, onColorsChanged, onCubeSizeChanged, hasProgress, files }: SettingsModalDeps, doc: Document = document) {
     // Every element used here is in index.html.
     const $ = <T extends HTMLElement = HTMLElement>(id: string) => doc.getElementById(id) as T;
     const modal = $('settings-modal');
@@ -33,6 +37,7 @@ export function createSettingsModal({ settings, onColorsChanged, files }: Settin
     const scrambleInput = $<HTMLInputElement>('scramble-amount-input');
     const replaySlider = $<HTMLInputElement>('replay-speed-slider');
     const replayLabel = $('replay-speed-label');
+    const cubeSizeSelect = $<HTMLSelectElement>('cube-size-select');
     const fromTemplate = (id: string) => $<HTMLTemplateElement>(id).content.firstElementChild!.cloneNode(true) as HTMLElement;
     let open = false;
 
@@ -100,6 +105,7 @@ export function createSettingsModal({ settings, onColorsChanged, files }: Settin
         resetToThemeBtn.hidden = !isCustom;
         resetToThemeBtn.textContent = `Reset to ${THEMES[currentTheme]?.name || 'Standard'} theme`;
 
+        cubeSizeSelect.value = String(settings.getCubeSize());
         scrambleInput.value = String(settings.getScrambleAmount());
         replaySlider.value = String(settings.getReplaySpeed());
         replayLabel.textContent = `${settings.getReplaySpeed()}x`;
@@ -195,6 +201,15 @@ export function createSettingsModal({ settings, onColorsChanged, files }: Settin
     resetToThemeBtn.addEventListener('click', () => selectTheme(settings.getThemeId()));
     $('save-preset-btn').addEventListener('click', savePreset);
     isolateKeys(presetNameInput, savePreset);
+    cubeSizeSelect.addEventListener('change', () => {
+        const size = Number(cubeSizeSelect.value);
+        if (hasProgress() && !confirm('Changing the cube size starts a new cube. Abandon the current one?')) {
+            cubeSizeSelect.value = String(settings.getCubeSize());
+            return;
+        }
+        onCubeSizeChanged(size);
+    });
+    cubeSizeSelect.addEventListener('keydown', e => e.stopPropagation()); // arrow keys etc. aren't cube moves
     $('scramble-amount-save').addEventListener('click', saveScrambleAmount);
     isolateKeys(scrambleInput, saveScrambleAmount);
     replaySlider.addEventListener('input', () => {

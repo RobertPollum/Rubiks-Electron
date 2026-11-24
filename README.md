@@ -76,7 +76,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
     - [ ] Data backup for an account if it's an electron application? IE story in Google Drive, Dropbox, Onedrive, Mega, etc...
 - [x] Storage for session to allow user to return and pick up where they left off when the application opens/closes
 - [ ] Allow user to modify the cube
-    - [ ] Allow them to modify number of cubes 2x2, 3x3, 4x4, etc. This may require an interace redesin.
+    - [x] Allow them to modify number of cubes 2x2, 3x3, 4x4, etc. (2x2x2 to 7x7x7, in Settings; inner layers via number keys)
     - [x] Allow user to modify the colors used for the faces in realtime.
     - [x] Create some predefined color sets, things for color blindness, high contrast, grayscale, standard, pastel
     - [x] Allow user to save and load color sets
@@ -94,4 +94,4 @@ The code is split so that everything except `electron/` and `platform/` can run 
 6. ~~Convert to TypeScript and retire the old `rubiks-cube-ts` scaffold.~~
 7. ~~Publish the web build; add an Electron file-storage adapter over IPC.~~
 8. Accounts and cloud sync via an API storage adapter.
-9. Other cube sizes (2x2, 4x4, ...), built on the cube model.
+9. ~~Other cube sizes (2x2, 4x4, ...), built on the cube model.~~
