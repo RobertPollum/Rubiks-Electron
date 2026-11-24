@@ -9,7 +9,9 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "electron",
@@ -38,7 +40,8 @@
     "css-loader": "^6.11.0",
     "electron": "38.0.0",
     "node-loader": "^2.1.0",
-    "style-loader": "^3.3.4"
+    "style-loader": "^3.3.4",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",

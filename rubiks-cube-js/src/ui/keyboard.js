@@ -9,9 +9,8 @@ const CUBE_KEYS = { x: 'x', y: 'y', z: 'z' };
  * @param {Object} handlers
  * @param {() => boolean} handlers.isSettingsOpen
  * @param {() => void}    handlers.closeSettings
- * @param {() => boolean} handlers.isInputLocked   True while a replay/algorithm is playing.
- * @param {(face: string, clockwise: boolean, label: string) => void} handlers.turnFace
- * @param {(axis: string, clockwise: boolean, label: string) => void} handlers.turnCube
+ * @param {() => boolean} handlers.isInputLocked   True while scrambling or playing back.
+ * @param {(move: {face: string, clockwise: boolean}, label: string) => void} handlers.turn
  * @param {() => void}    handlers.resetCamera
  */
 export function bindKeyboard(handlers, target = document) {
@@ -27,9 +26,9 @@ export function bindKeyboard(handlers, target = document) {
 
         if (FACE_KEYS[key]) {
             const face = FACE_KEYS[key];
-            handlers.turnFace(face, clockwise, FACE_NAMES[face]);
+            handlers.turn({ face, clockwise }, FACE_NAMES[face]);
         } else if (CUBE_KEYS[key]) {
-            handlers.turnCube(CUBE_KEYS[key], clockwise, `Cube ${key.toUpperCase()}`);
+            handlers.turn({ face: CUBE_KEYS[key], clockwise }, `Cube ${key.toUpperCase()}`);
         } else if (key === ' ') {
             event.preventDefault();
             handlers.resetCamera();

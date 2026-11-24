@@ -25,16 +25,14 @@ export async function bootstrap(platform, doc = document) {
     const game = createGameController({ gameData, save, settings, sidebar, status });
 
     const view = new CubeView({
-        colors: settings.getActiveColors(),
-        onMoveComplete: game.handleMoveComplete,
-        onCameraResetComplete: () => status.ready(),
-        getSpeedMultiplier: () => (game.isReplaying() ? settings.getReplaySpeed() : 1)
+        palette: settings.getActiveColors(),
+        onCameraResetComplete: () => status.ready()
     });
     game.attachView(view);
 
     const settingsModal = createSettingsModal({
         settings,
-        onColorsChanged: colors => view.applyColors(colors),
+        onColorsChanged: colors => view.setPalette(colors),
         files: platform.files
     }, doc);
 
@@ -54,9 +52,8 @@ export async function bootstrap(platform, doc = document) {
     bindKeyboard({
         isSettingsOpen: settingsModal.isOpen,
         closeSettings: settingsModal.close,
-        isInputLocked: game.isReplaying,
-        turnFace: game.turnFace,
-        turnCube: game.turnCube,
+        isInputLocked: game.isInputLocked,
+        turn: game.turn,
         resetCamera: game.resetCamera
     }, doc);
 

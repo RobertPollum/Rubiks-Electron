@@ -12,10 +12,13 @@ export const MAX_REPLAY_SPEED = 3;
 export function createDefaultData() {
     return {
         solves: [],
+        // See core/savedGame.js for this format.
         currentGame: {
-            moveHistory: [],
+            version: 2,
             cubeState: 'solved', // 'solved' | 'scrambled' | 'solving'
-            cubies: null
+            start: null,
+            scramble: [],
+            moveHistory: []
         },
         stats: {
             totalSolves: 0,

@@ -1,62 +1,46 @@
-// The 3D view: scene, camera, orbit controls, and animated turns.
+// The 3D view: scene, camera, orbit controls, and turn animation.
 //
-// CubeView knows how to draw and animate the cube. It knows nothing about
-// games, scrambles, history or the DOM outside its own canvas. It reports
-// each finished turn through `onMoveComplete` and lets the caller decide what
-// that means.
+// CubeView draws whatever cube state it is given and can animate one move
+// at a time. It holds no game rules: the game controller owns the real cube
+// state and decides which moves to play.
+//
+//   view.show(state)              draw a state immediately
+//   await view.animate(move)      animate a move, then draw the resulting state
+//   view.cancel()                 stop an animation in progress
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import {
-    generateCube3dArray,
-    allCubies,
-    disposeCubeMeshes,
-    applyColorsToCubies,
-    getFaceCubies,
-    reindexCubies,
-    isCubeSolved,
-    serializeCubies,
-    restoreCubies
-} from './cubeMeshes';
+import { createSolvedState, applyMove, getMoveSpec } from '../core/cubeModel';
+import { createCubies, resetCubieTransforms, paintCubies } from './cubeMeshes';
 
 const CANVAS_SCALE = 0.4; // canvas size as a fraction of the window
-const ROTATION_SPEED = 0.1; // radians per frame
+const ROTATION_SPEED = 0.1; // radians per frame at speed 1
 const QUARTER_TURN = Math.PI / 2;
 const CAMERA_RESET_SPEED = 0.04;
 const DEFAULT_CAMERA_POSITION = new THREE.Vector3(0, 3, 12);
 const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 0, 0);
 
-const AXES = {
-    x: new THREE.Vector3(1, 0, 0),
-    y: new THREE.Vector3(0, 1, 0),
-    z: new THREE.Vector3(0, 0, 1)
-};
-
-// TODO: opposite faces currently turn the same world direction, so either
-// R/U/F or L/D/B do not match standard notation. Fix once a pure cube model
-// with tests exists in core/.
-const FACE_AXES = { R: 'x', L: 'x', U: 'y', D: 'y', F: 'z', B: 'z' };
-
 export class CubeView {
     /**
      * @param {Object} options
-     * @param {string[]} options.colors  Six hex colours, in face material order.
-     * @param {(move: {face: string, clockwise: boolean, isCubeRotation: boolean}) => void} [options.onMoveComplete]
-     *        Called after each turn finishes, before the next queued turn starts.
+     * @param {string[]} options.palette  Six hex colours, in FACE_ORDER.
      * @param {() => void} [options.onCameraResetComplete]
-     * @param {() => number} [options.getSpeedMultiplier]  Scales turn speed (e.g. for replays).
      */
-    constructor({ colors, onMoveComplete = () => {}, onCameraResetComplete = () => {}, getSpeedMultiplier = () => 1 }) {
-        this.onMoveComplete = onMoveComplete;
+    constructor({ palette, onCameraResetComplete = () => {} }) {
+        this.palette = palette;
+        this.state = createSolvedState();
         this.onCameraResetComplete = onCameraResetComplete;
-        this.getSpeedMultiplier = getSpeedMultiplier;
+        this.animation = null;
 
         this.sizes = this._windowSizes();
 
         this.scene = new THREE.Scene();
         this.scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-        this.cubeArray = generateCube3dArray(3, this.scene, colors);
+        this.cubeRoot = new THREE.Group();
+        this.scene.add(this.cubeRoot);
+        this.cubies = createCubies(this.cubeRoot);
+        paintCubies(this.cubies, this.state, this.palette);
 
         this.camera = new THREE.PerspectiveCamera(75, this.sizes.width / this.sizes.height, 0.1, 1000);
         this.camera.position.copy(DEFAULT_CAMERA_POSITION);
@@ -74,21 +58,11 @@ export class CubeView {
         this.controls.rotateSpeed = 0.6;
         this.controls.minDistance = 5;
         this.controls.maxDistance = 30;
-        this.controls.target.set(0, 0, 0);
+        this.controls.target.copy(DEFAULT_CAMERA_TARGET);
         this.controls.update();
 
-        // Turn animation state
-        this.isRotating = false;
-        this.rotationQueue = [];
-        this.currentRotation = null;
-
-        // Camera reset animation state
         this.cameraResetting = false;
         this.cameraResetAlpha = 0;
-    }
-
-    get domElement() {
-        return this.renderer.domElement;
     }
 
     mount(container) {
@@ -99,86 +73,57 @@ export class CubeView {
         this.renderer.setAnimationLoop(() => this._renderFrame());
     }
 
-    // ---- Queries -------------------------------------------------------
+    // ---- Cube ------------------------------------------------------------
 
-    /** Number of turns waiting behind the one in progress. */
-    get pendingCount() {
-        return this.rotationQueue.length;
+    /** Draw `state` immediately, abandoning any animation in progress. */
+    show(state) {
+        this._finishAnimation(false);
+        this.state = state;
+        resetCubieTransforms(this.cubies, this.cubeRoot);
+        paintCubies(this.cubies, this.state, this.palette);
     }
 
-    /** No turn animating and nothing queued. */
-    isIdle() {
-        return !this.isRotating && this.rotationQueue.length === 0;
+    /** Change the six face colours. */
+    setPalette(palette) {
+        this.palette = palette;
+        paintCubies(this.cubies, this.state, this.palette);
     }
-
-    isSolved() {
-        return isCubeSolved(this.cubeArray);
-    }
-
-    serialize() {
-        return serializeCubies(this.cubeArray);
-    }
-
-    // ---- Turns ---------------------------------------------------------
-
-    /** Turn one face a quarter turn. Queued if another turn is animating. */
-    rotateFace(face, clockwise = true) {
-        if (this.isRotating) {
-            this.rotationQueue.push({ face, clockwise, isCubeRotation: false });
-            return;
-        }
-        this._beginRotation(getFaceCubies(this.cubeArray, face), {
-            face,
-            clockwise,
-            axis: AXES[FACE_AXES[face]] || AXES.y,
-            isCubeRotation: false
-        });
-    }
-
-    /** Rotate the whole cube a quarter turn around x, y or z. */
-    rotateCube(axis, clockwise = true) {
-        if (this.isRotating) {
-            this.rotationQueue.push({ face: axis, clockwise, isCubeRotation: true });
-            return;
-        }
-        this._beginRotation(allCubies(this.cubeArray), {
-            face: axis,
-            clockwise,
-            axis: AXES[axis] || AXES.y,
-            isCubeRotation: true
-        });
-    }
-
-    // ---- Whole-cube state ---------------------------------------------
 
     /**
-     * Throw away the current cubies (cancelling any turns) and build a fresh,
-     * solved cube with the given colours.
+     * Animate one move from the currently shown state, then show the result.
+     * Resolves true when the move finished, or false if it was cancelled.
+     * @param {{face: string, clockwise: boolean}} move
+     * @param {number | (() => number)} [speed]  Multiplier, read every frame.
      */
-    rebuild(colors) {
-        if (this.currentRotation) {
-            this._releaseFromGroup(this.currentRotation);
-            this.currentRotation = null;
-            this.isRotating = false;
+    animate(move, speed = 1) {
+        this._finishAnimation(false);
+        const { axis, direction, inLayer } = getMoveSpec(move);
+
+        const pivot = new THREE.Group();
+        this.cubeRoot.add(pivot);
+        for (const cubie of this.cubies) {
+            if (inLayer(cubie.userData.gridPos)) pivot.add(cubie);
         }
-        this.rotationQueue = [];
-        disposeCubeMeshes(this.scene, this.cubeArray);
-        this.cubeArray = generateCube3dArray(3, this.scene, colors);
+
+        return new Promise(resolve => {
+            this.animation = {
+                move,
+                pivot,
+                axis,
+                targetAngle: direction * QUARTER_TURN,
+                angle: 0,
+                speed: typeof speed === 'function' ? speed : () => speed,
+                resolve
+            };
+        });
     }
 
-    /** Apply a saved snapshot. Returns false if it could not be applied. */
-    restore(savedCubies) {
-        const restored = restoreCubies(this.cubeArray, savedCubies);
-        if (!restored) return false;
-        this.cubeArray = restored;
-        return true;
+    /** Stop the current animation (its promise resolves false) and redraw the last state. */
+    cancel() {
+        this.show(this.state);
     }
 
-    applyColors(colors) {
-        applyColorsToCubies(this.cubeArray, colors);
-    }
-
-    // ---- Camera / window ----------------------------------------------
+    // ---- Camera / window ------------------------------------------------
 
     resetCamera() {
         this.cameraResetting = true;
@@ -194,7 +139,7 @@ export class CubeView {
         this.controls.update();
     }
 
-    // ---- Internals -----------------------------------------------------
+    // ---- Internals -------------------------------------------------------
 
     _windowSizes() {
         return {
@@ -203,83 +148,26 @@ export class CubeView {
         };
     }
 
-    _beginRotation(cubes, { face, clockwise, axis, isCubeRotation }) {
-        this.isRotating = true;
-        const group = new THREE.Group();
-        this.scene.add(group);
-
-        // Temporarily parent the moving cubies to a group we can spin
-        cubes.forEach(cube => {
-            const worldPosition = new THREE.Vector3();
-            cube.getWorldPosition(worldPosition);
-            this.scene.remove(cube);
-            group.add(cube);
-            group.worldToLocal(worldPosition);
-            cube.position.copy(worldPosition);
-        });
-
-        this.currentRotation = {
-            group,
-            cubes,
-            face,
-            targetAngle: clockwise ? QUARTER_TURN : -QUARTER_TURN,
-            currentAngle: 0,
-            axis,
-            isCubeRotation
-        };
-    }
-
-    /** Move cubies out of a rotation group back into the scene, keeping their world transforms. */
-    _releaseFromGroup({ group, cubes }) {
-        cubes.forEach(cube => {
-            const worldPosition = new THREE.Vector3();
-            const worldQuaternion = new THREE.Quaternion();
-            cube.getWorldPosition(worldPosition);
-            cube.getWorldQuaternion(worldQuaternion);
-
-            group.remove(cube);
-            this.scene.add(cube);
-
-            cube.position.copy(worldPosition);
-            cube.quaternion.copy(worldQuaternion);
-        });
-        this.scene.remove(group);
-    }
-
-    _stepRotation() {
-        const rotation = this.currentRotation;
-        const { group, targetAngle, axis } = rotation;
-
-        const step = Math.sign(targetAngle) * ROTATION_SPEED * this.getSpeedMultiplier();
-        rotation.currentAngle += step;
-        group.rotateOnAxis(axis, step);
-
-        if (Math.abs(rotation.currentAngle) < Math.abs(targetAngle)) return;
-
-        // Snap to the exact angle and hand the cubies back to the scene
-        group.rotateOnAxis(axis, targetAngle - rotation.currentAngle);
-        this._releaseFromGroup(rotation);
-        this.cubeArray = reindexCubies(this.cubeArray);
-
-        // Report while this turn is still "current" so listeners see the
-        // same queue state the original implementation exposed.
-        this.onMoveComplete({
-            face: rotation.face,
-            clockwise: rotation.targetAngle > 0,
-            isCubeRotation: rotation.isCubeRotation
-        });
-
-        this.currentRotation = null;
-        this.isRotating = false;
-
-        if (this.rotationQueue.length > 0) {
-            const next = this.rotationQueue.shift();
-            if (next.isCubeRotation) {
-                this.rotateCube(next.face, next.clockwise);
-            } else {
-                this.rotateFace(next.face, next.clockwise);
-            }
+    /** End the current animation, if any, resolving its promise with `completed`. */
+    _finishAnimation(completed) {
+        const animation = this.animation;
+        if (!animation) return;
+        this.animation = null;
+        this.cubeRoot.remove(animation.pivot);
+        resetCubieTransforms(this.cubies, this.cubeRoot);
+        if (completed) {
+            this.state = applyMove(this.state, animation.move);
         }
+        paintCubies(this.cubies, this.state, this.palette);
+        animation.resolve(completed);
+    }
+
+    _stepAnimation() {
+        const a = this.animation;
+        const step = ROTATION_SPEED * a.speed();
+        a.angle = Math.min(a.angle + step, Math.abs(a.targetAngle));
+        a.pivot.rotation[a.axis] = Math.sign(a.targetAngle) * a.angle;
+        if (a.angle >= Math.abs(a.targetAngle)) this._finishAnimation(true);
     }
 
     _stepCameraReset() {
@@ -289,16 +177,12 @@ export class CubeView {
             this.cameraResetting = false;
             this.onCameraResetComplete();
         }
-        this.camera.position.lerpVectors(
-            this.camera.position.clone(),
-            DEFAULT_CAMERA_POSITION,
-            this.cameraResetAlpha
-        );
+        this.camera.position.lerpVectors(this.camera.position.clone(), DEFAULT_CAMERA_POSITION, this.cameraResetAlpha);
         this.controls.target.lerp(DEFAULT_CAMERA_TARGET, this.cameraResetAlpha);
     }
 
     _renderFrame() {
-        if (this.currentRotation) this._stepRotation();
+        if (this.animation) this._stepAnimation();
         if (this.cameraResetting) this._stepCameraReset();
         this.controls.update();
         this.renderer.render(this.scene, this.camera);

@@ -1,24 +1,20 @@
-// Game flow: move history, scramble / reset / replay, algorithm playback,
+// Game flow: player moves, scramble / reset / replay, algorithm playback,
 // solve detection, stats, and saving progress.
 //
-// The controller coordinates the pieces but owns no DOM or three.js code
-// itself: it drives a CubeView, reports to the sidebar and status bar, and
-// persists through the `save` callback.
+// The controller owns the real cube state (a core/cubeModel state). The
+// CubeView only animates and draws it. Moves run one at a time through a
+// queue, so every action reads top to bottom:
+//
+//     mode = 'scrambling';
+//     await playMoves(scramble);
+//     mode = 'idle';
 
-import { formatMoveNotation, parseNotationToMove, parseAlgorithmMoves } from '../core/notation';
+import { formatMoveNotation, parseNotationToMove, parseAlgorithmMoves, isCubeRotation } from '../core/notation';
+import { createSolvedState, applyMove, isSolved, statesEqual } from '../core/cubeModel';
+import { createSavedGame, loadSavedGame, countMoves } from '../core/savedGame';
 import { generateScramble } from '../core/scramble';
 import { computeStats, createSolveRecord } from '../core/stats';
 import { getAlgorithmById } from '../core/algorithms';
-
-/** Poll until `condition()` is true, then run `then`. */
-function waitUntil(condition, then, intervalMs = 50) {
-    const timer = setInterval(() => {
-        if (condition()) {
-            clearInterval(timer);
-            then();
-        }
-    }, intervalMs);
-}
 
 /**
  * @param {Object} deps
@@ -32,35 +28,83 @@ export function createGameController({ gameData, save, settings, sidebar, status
     /** @type {import('../view/cubeView').CubeView} */
     let view = null;
 
-    let moveHistory = [];
-    let cubeState = 'solved'; // 'solved' | 'scrambled' | 'solving'
-    let lastScrambleMoves = [];
-    let sessionSolves = gameData.solves || [];
+    // ---- State -----------------------------------------------------------
 
-    // While scrambling (or fast-forwarding setup moves) completed turns are
-    // counted down here instead of being recorded as player moves.
-    let isScrambling = false;
-    let scrambleMoveCount = 0;
+    let cube = createSolvedState();  // the real cube
+    let start = cube;                // cube at the start of this attempt (after the scramble)
+    let scramble = [];               // moves that produced `start`, if known
+    let moveHistory = [];            // [{ notation, timestamp }] since `start`
+    let cubeState = 'solved';        // 'solved' | 'scrambled' | 'solving'
+    let solves = gameData.solves || [];
 
-    // While replaying a game or playing an algorithm, input is locked and
-    // completed turns are counted down here.
-    let isReplaying = false;
-    let replayMoveCount = 0;
+    /** 'idle' (player can move) | 'scrambling' | 'playback' (replay or algorithm) */
+    let mode = 'idle';
 
-    // ---- UI sync -------------------------------------------------------
+    // ---- Move queue --------------------------------------------------------
+
+    // Moves animate one at a time. `generation` changes on reset so that
+    // anything queued or animating from before is abandoned.
+    let queue = Promise.resolve();
+    let pendingTasks = 0;
+    let generation = 0;
+
+    /** Run `task(isCurrent)` after everything already queued. Resolves with its result. */
+    function enqueue(task) {
+        const gen = generation;
+        const isCurrent = () => gen === generation;
+        pendingTasks++;
+        const result = queue
+            .then(() => (isCurrent() ? task(isCurrent) : false))
+            .finally(() => { pendingTasks--; });
+        queue = result.catch(err => console.error('Move failed:', err));
+        return result;
+    }
+
+    /**
+     * Queue `moves` to animate in order, updating the cube after each.
+     * Resolves true if they all ran, false if a reset interrupted them.
+     */
+    function playMoves(moves, { speed = 1, onMove } = {}) {
+        return enqueue(async isCurrent => {
+            for (const move of moves) {
+                const finished = await view.animate(move, speed);
+                if (!finished || !isCurrent()) return false;
+                cube = applyMove(cube, move);
+                if (onMove) onMove(move);
+            }
+            return true;
+        });
+    }
+
+    /** Drop everything queued or animating. */
+    function cancelMoves() {
+        generation++;
+        view.cancel();
+    }
+
+    function showCube(state) {
+        cube = state;
+        view.show(cube);
+    }
+
+    const isBusy = () => mode !== 'idle' || pendingTasks > 0;
+    const replaySpeed = () => settings.getReplaySpeed();
+
+    // ---- UI sync -----------------------------------------------------------
 
     function setCubeState(state) {
         cubeState = state;
         sidebar.setCubeState(state);
     }
 
-    function refreshMoveList() {
+    function setMoveHistory(history) {
+        moveHistory = history;
         sidebar.renderMoveList(moveHistory);
-        sidebar.setMoveCount(moveHistory.length);
+        sidebar.setMoveCount(countMoves(moveHistory));
     }
 
     function updateReplayButton() {
-        sidebar.setReplayEnabled(!(moveHistory.length === 0 || isScrambling || isReplaying));
+        sidebar.setReplayEnabled(moveHistory.length > 0 && mode === 'idle');
     }
 
     function setActionButtonsEnabled(enabled) {
@@ -68,208 +112,144 @@ export function createGameController({ gameData, save, settings, sidebar, status
         if (enabled) updateReplayButton();
     }
 
-    // ---- Persistence ---------------------------------------------------
+    /** Make the current cube the starting point of a new attempt. */
+    function startAttempt(scrambleMoves, state) {
+        start = cube;
+        scramble = scrambleMoves;
+        setMoveHistory([]);
+        setCubeState(state);
+    }
+
+    // ---- Persistence -------------------------------------------------------
 
     function persist() {
-        gameData.currentGame = {
-            moveHistory,
-            cubeState,
-            cubies: view.serialize()
-        };
-        gameData.solves = sessionSolves;
-        gameData.stats = computeStats(sessionSolves);
+        gameData.currentGame = createSavedGame({ start, scramble, moveHistory, cubeState });
+        gameData.solves = solves;
+        gameData.stats = computeStats(solves);
         sidebar.renderStats(gameData.stats);
         save();
     }
 
-    function recordSolve() {
-        sessionSolves.push(createSolveRecord(moveHistory.length));
-        sidebar.renderSolveList(sessionSolves);
-        persist();
+    function recordSolve(moveCount) {
+        solves.push(createSolveRecord(moveCount));
+        sidebar.renderSolveList(solves);
     }
 
-    function clearMoveHistory() {
-        moveHistory = [];
-        refreshMoveList();
-    }
+    // ---- Player moves -------------------------------------------------------
 
-    // ---- Turn completion ----------------------------------------------
+    function onPlayerMove(move) {
+        setMoveHistory([...moveHistory, { notation: formatMoveNotation(move), timestamp: Date.now() }]);
 
-    function onScrambleMoveComplete() {
-        scrambleMoveCount--;
-        if (scrambleMoveCount <= 0) {
-            isScrambling = false;
-            setCubeState('scrambled');
-            persist();
-            updateReplayButton();
+        if (!isCubeRotation(move) && cubeState !== 'solved') {
+            if (cubeState === 'scrambled') setCubeState('solving');
+            if (isSolved(cube)) {
+                const moveCount = countMoves(moveHistory);
+                setCubeState('solved');
+                recordSolve(moveCount);
+                status.show(`Cube solved in ${moveCount} moves!`, 'success');
+            }
         }
+
+        persist();
+        updateReplayButton();
     }
 
-    function onReplayMoveComplete() {
-        replayMoveCount--;
-        const total = view.pendingCount + replayMoveCount + 1;
-        const done = total - replayMoveCount;
-        status.show(`Replaying move ${done} of ${total}...`, 'replay');
+    /** A turn from the keyboard. Ignored during scrambles and playback. */
+    function turn(move, label) {
+        if (mode !== 'idle') return;
+        playMoves([move], { onMove: onPlayerMove });
+        const direction = move.clockwise ? 'clockwise' : 'counter-clockwise';
+        status.show(`Rotating ${label} face ${direction}...`, 'success', { revertAfter: 1000 });
+    }
 
-        if (replayMoveCount <= 0 && view.pendingCount === 0) {
-            isReplaying = false;
-            setActionButtonsEnabled(true);
+    // ---- Actions -------------------------------------------------------------
+
+    async function scrambleCube() {
+        if (isBusy()) return;
+        const count = settings.getScrambleAmount();
+        const moves = generateScramble(count);
+
+        mode = 'scrambling';
+        setMoveHistory([]);
+        setCubeState('scrambled');
+        updateReplayButton();
+        status.show(`Scrambling with ${count} random moves...`, 'warning');
+
+        const finished = await playMoves(moves);
+        if (!finished) return; // reset while scrambling; reset() tidied up
+
+        mode = 'idle';
+        startAttempt(moves, 'scrambled');
+        persist();
+        updateReplayButton();
+    }
+
+    function reset() {
+        cancelMoves();
+        mode = 'idle';
+        showCube(createSolvedState());
+        startAttempt([], 'solved');
+        setActionButtonsEnabled(true);
+        persist();
+        status.show('Cube reset to solved state!', 'info', { revertAfter: 1500 });
+    }
+
+    /** Jump back to the start of this attempt and animate every move since. */
+    async function replay() {
+        if (moveHistory.length === 0 || isBusy()) return;
+        const moves = moveHistory.map(entry => parseNotationToMove(entry.notation));
+        const finalCube = cube;
+
+        mode = 'playback';
+        setActionButtonsEnabled(false);
+        showCube(start);
+        status.show(`Replaying ${moves.length} moves...`, 'replay');
+
+        let done = 0;
+        const finished = await playMoves(moves, {
+            speed: replaySpeed,
+            onMove: () => status.show(`Replaying move ${++done} of ${moves.length}...`, 'replay')
+        });
+
+        mode = 'idle';
+        setActionButtonsEnabled(true);
+        if (finished) {
+            if (!statesEqual(cube, finalCube)) console.warn('Replay ended on a different cube than it started from');
             status.show('Replay complete!', 'success', { revertAfter: 2000 });
         }
     }
 
-    function onPlayerMoveComplete(face, clockwise) {
-        moveHistory.push({ notation: formatMoveNotation(face, clockwise), timestamp: Date.now() });
-        refreshMoveList();
-
-        if (cubeState !== 'solved') {
-            if (cubeState === 'scrambled') {
-                setCubeState('solving');
-            }
-            if (view.isSolved()) {
-                setCubeState('solved');
-                recordSolve();
-                status.show(`Cube solved in ${moveHistory.length} moves!`, 'success');
-            }
-        }
-
-        persist();
-        updateReplayButton();
-    }
-
-    /** Called by the CubeView each time a turn finishes animating. */
-    function handleMoveComplete({ face, clockwise, isCubeRotation }) {
-        if (isCubeRotation) return; // whole-cube rotations aren't moves
-        if (isScrambling) return onScrambleMoveComplete();
-        if (isReplaying) return onReplayMoveComplete();
-        onPlayerMoveComplete(face, clockwise);
-    }
-
-    // ---- Actions -------------------------------------------------------
-
-    function scramble() {
-        if (!view.isIdle()) return;
-
-        clearMoveHistory();
-        const scrambleCount = settings.getScrambleAmount();
-        lastScrambleMoves = generateScramble(scrambleCount);
-        isScrambling = true;
-        scrambleMoveCount = scrambleCount;
-        setCubeState('scrambled');
-        updateReplayButton();
-
-        for (const move of lastScrambleMoves) {
-            view.rotateFace(move.face, move.clockwise);
-        }
-        status.show(`Scrambling with ${scrambleCount} random moves...`, 'warning');
-    }
-
-    function reset() {
-        view.rebuild(settings.getActiveColors());
-
-        clearMoveHistory();
-        lastScrambleMoves = [];
-        isScrambling = false;
-        scrambleMoveCount = 0;
-        setCubeState('solved');
-        persist();
-        updateReplayButton();
-
-        status.show('Cube reset to solved state!', 'info', { revertAfter: 1500 });
-    }
-
-    /** Rebuild from solved, fast-forward the scramble, then animate the player's moves. */
-    function replay() {
-        if (moveHistory.length === 0 || view.isRotating || isReplaying || isScrambling) return;
-
-        const savedMoveHistory = [...moveHistory];
-        const savedScrambleMoves = [...lastScrambleMoves];
-
-        setActionButtonsEnabled(false);
-        view.rebuild(settings.getActiveColors());
-
-        isScrambling = true;
-        scrambleMoveCount = savedScrambleMoves.length;
-
-        const startUserMoveReplay = () => {
-            isReplaying = true;
-            replayMoveCount = savedMoveHistory.length;
-            status.show(`Replaying ${savedMoveHistory.length} moves...`, 'replay');
-            for (const move of savedMoveHistory) {
-                const { face, clockwise } = parseNotationToMove(move.notation);
-                view.rotateFace(face, clockwise);
-            }
-        };
-
-        if (savedScrambleMoves.length > 0) {
-            for (const move of savedScrambleMoves) {
-                view.rotateFace(move.face, move.clockwise);
-            }
-            waitUntil(() => !isScrambling && view.isIdle(), () => {
-                // Restore state references without re-recording
-                moveHistory = savedMoveHistory;
-                lastScrambleMoves = savedScrambleMoves;
-                startUserMoveReplay();
-            });
-        } else {
-            isScrambling = false;
-            scrambleMoveCount = 0;
-            moveHistory = savedMoveHistory;
-            lastScrambleMoves = savedScrambleMoves;
-            startUserMoveReplay();
-        }
-    }
-
-    /** Abandon the current game, apply the algorithm's setup, then play it. */
-    function runAlgorithm(algorithmId) {
+    /**
+     * Start from solved, apply the algorithm's setup, then play the
+     * algorithm. The resulting position becomes a new attempt.
+     */
+    async function runAlgorithm(algorithmId) {
         const alg = getAlgorithmById(algorithmId);
-        if (!alg || view.isRotating || isReplaying || isScrambling) return;
-
+        if (!alg || isBusy()) return;
         const setupMoves = parseAlgorithmMoves(alg.setup);
         const algMoves = parseAlgorithmMoves(alg.moves);
         if (algMoves.length === 0) return;
 
-        clearMoveHistory();
-        lastScrambleMoves = [];
-        setCubeState('solved');
+        mode = 'playback';
         setActionButtonsEnabled(false);
-        view.rebuild(settings.getActiveColors());
+        showCube(createSolvedState());
+        startAttempt([], 'solved');
 
-        const play = () => {
-            isReplaying = true;
-            replayMoveCount = algMoves.length;
-            status.show(`Playing ${alg.name}: ${alg.moves}`, 'replay');
-            for (const move of algMoves) {
-                view.rotateFace(move.face, move.clockwise);
-            }
-        };
-
+        let finished = true;
         if (setupMoves.length > 0) {
-            isScrambling = true;
-            scrambleMoveCount = setupMoves.length;
             status.show(`Setting up ${alg.name}...`, 'warning');
-            for (const move of setupMoves) {
-                view.rotateFace(move.face, move.clockwise);
-            }
-            waitUntil(() => !isScrambling && view.isIdle(), play);
-        } else {
-            play();
+            finished = await playMoves(setupMoves);
         }
-    }
+        if (finished) {
+            status.show(`Playing ${alg.name}: ${alg.moves}`, 'replay');
+            finished = await playMoves(algMoves, { speed: replaySpeed });
+        }
 
-    function turnFace(face, clockwise, label) {
-        view.rotateFace(face, clockwise);
-        showTurnFeedback(label, clockwise);
-    }
-
-    function turnCube(axis, clockwise, label) {
-        view.rotateCube(axis, clockwise);
-        showTurnFeedback(label, clockwise);
-    }
-
-    function showTurnFeedback(label, clockwise) {
-        const direction = clockwise ? 'clockwise' : 'counter-clockwise';
-        status.show(`Rotating ${label} face ${direction}...`, 'success', { revertAfter: 1000 });
+        mode = 'idle';
+        startAttempt([], isSolved(cube) ? 'solved' : 'scrambled');
+        setActionButtonsEnabled(true);
+        persist();
+        if (finished) status.show(`${alg.name} complete!`, 'success', { revertAfter: 2000 });
     }
 
     function resetCamera() {
@@ -277,14 +257,17 @@ export function createGameController({ gameData, save, settings, sidebar, status
         status.show('Resetting view...', 'info');
     }
 
-    /** Restore an unfinished game from saved data, if there is one. */
+    /** Restore the saved game, if there is one worth resuming. */
     function resumeSavedGame() {
-        const saved = gameData.currentGame;
-        if (saved && saved.cubies && saved.cubeState !== 'solved' && view.restore(saved.cubies)) {
-            moveHistory = saved.moveHistory || [];
-            refreshMoveList();
+        const saved = loadSavedGame(gameData.currentGame);
+        if (saved && (saved.moveHistory.length > 0 || !isSolved(saved.cube))) {
+            showCube(saved.cube);
+            start = saved.start;
+            scramble = saved.scramble;
+            setMoveHistory(saved.moveHistory);
             setCubeState(saved.cubeState);
-            status.show('Resumed previous game', 'warning', { bold: false });
+            if (saved.migrated) persist(); // upgrade old saves to the current format
+            if (cubeState !== 'solved') status.show('Resumed previous game', 'warning', { bold: false });
         } else {
             setCubeState('solved');
         }
@@ -295,20 +278,18 @@ export function createGameController({ gameData, save, settings, sidebar, status
         attachView(cubeView) {
             view = cubeView;
         },
-        handleMoveComplete,
-        scramble,
+        turn,
+        scramble: scrambleCube,
         reset,
         replay,
         runAlgorithm,
-        turnFace,
-        turnCube,
         resetCamera,
         resumeSavedGame,
         renderHistory() {
-            sidebar.renderSolveList(sessionSolves);
+            sidebar.renderSolveList(solves);
             sidebar.renderStats(gameData.stats);
         },
-        /** True while a replay or algorithm is playing; player input is ignored. */
-        isReplaying: () => isReplaying
+        /** True while scrambling or playing back; keyboard turns are ignored. */
+        isInputLocked: () => mode !== 'idle'
     };
 }

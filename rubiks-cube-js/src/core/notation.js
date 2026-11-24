@@ -17,16 +17,26 @@ export const FACE_NAMES = {
     B: 'Back'
 };
 
+/** True for whole-cube rotations (x, y, z), which reorient the cube but aren't counted as moves. */
+export function isCubeRotation(move) {
+    return CUBE_AXES.includes(move.face);
+}
+
+export function isKnownMove(move) {
+    return !!move && (FACES.includes(move.face) || CUBE_AXES.includes(move.face)) && typeof move.clockwise === 'boolean';
+}
+
 /** { face: 'R', clockwise: false } -> "R'" */
-export function formatMoveNotation(face, clockwise) {
+export function formatMoveNotation({ face, clockwise }) {
     return clockwise ? face : face + "'";
 }
 
-/** "R'" -> { face: 'R', clockwise: false }. Single quarter turns only. */
+/** "R'" -> { face: 'R', clockwise: false }. Single quarter turns only; null if not a known move. */
 export function parseNotationToMove(notation) {
+    if (typeof notation !== 'string') return null;
     const isPrime = notation.endsWith("'");
-    const face = isPrime ? notation.slice(0, -1) : notation;
-    return { face, clockwise: !isPrime };
+    const move = { face: isPrime ? notation.slice(0, -1) : notation, clockwise: !isPrime };
+    return isKnownMove(move) ? move : null;
 }
 
 /**
