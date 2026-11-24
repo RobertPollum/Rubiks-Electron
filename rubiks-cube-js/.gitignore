@@ -94,3 +94,7 @@ out/
 # Vite
 .vite/
 dist-web/
+
+# Playwright
+test-results/
+playwright-report/

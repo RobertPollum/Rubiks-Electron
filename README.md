@@ -19,6 +19,7 @@ From `rubiks-cube-js/`:
 | `npm run build:web` | Build the website into `dist-web/` (static files, host anywhere) |
 | `npm run package` / `npm run make` | Package the Electron app / build installers |
 | `npm test` | Unit tests (Vitest) |
+| `npm run test:e2e` | Browser tests of the web build (Playwright). First time: `npx playwright install chromium` |
 
 The Electron app and the website are built from the same `index.html` and `src/renderer.js`.
 
