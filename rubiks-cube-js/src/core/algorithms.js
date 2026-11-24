@@ -1,5 +1,6 @@
 // Common Rubik's Cube solving algorithms with setup moves
-// Each algorithm has a setup scramble that creates the case, then the algorithm solves it
+// Each algorithm has a setup scramble that creates the case, then the algorithm solves it.
+// Move strings are parsed with parseAlgorithmMoves() from ./notation.
 
 export const ALGORITHMS = [
     {
@@ -118,17 +119,4 @@ export function getAlgorithmCategories() {
         if (!cats.includes(alg.category)) cats.push(alg.category);
     }
     return cats;
-}
-
-export function parseAlgorithmMoves(moveString) {
-    if (!moveString || !moveString.trim()) return [];
-    return moveString.trim().split(/\s+/).map(notation => {
-        const has2 = notation.includes('2');
-        const isPrime = notation.includes("'");
-        const face = notation.replace(/['2]/g, '');
-        const clockwise = !isPrime;
-        const moves = [{ face, clockwise }];
-        if (has2) moves.push({ face, clockwise });
-        return moves;
-    }).flat();
 }

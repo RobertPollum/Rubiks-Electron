@@ -43,7 +43,7 @@ module.exports = {
               js: './src/renderer.js',
               name: 'main_window',
               preload: {
-                js: './src/preload.js',
+                js: './src/electron/preload.js',
               },
             },
           ],

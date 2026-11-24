@@ -51,9 +51,13 @@ export function hexToInt(hex) {
     return parseInt(hex.replace('#', ''), 16);
 }
 
+export function isValidHexColor(color) {
+    return typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color);
+}
+
 export function isValidColorScheme(colors) {
     if (!Array.isArray(colors) || colors.length !== 6) return false;
-    return colors.every(c => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c));
+    return colors.every(isValidHexColor);
 }
 
 export function createPresetExport(name, colors, description) {
