@@ -12,6 +12,8 @@
     "dev:web": "vite --config vite.web.config.mjs",
     "build:web": "vite build --config vite.web.config.mjs",
     "preview:web": "vite preview --config vite.web.config.mjs",
+    "build:web:e2e": "vite build --config vite.web.config.mjs --mode e2e",
+    "dev:sync-server": "node tools/mock-sync-server.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

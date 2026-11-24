@@ -19,6 +19,7 @@ From `rubiks-cube/`:
 | `npm run package` / `npm run make` | Package the Electron app / build installers |
 | `npm test` | Unit tests (Vitest) |
 | `npm run typecheck` | Type-check everything (TypeScript) |
+| `npm run dev:sync-server` | In-memory sync API for development (`npm run dev:web` and `npm start` point at it; sign in with any name) |
 | `npm run test:e2e` | Browser tests of the web build (Playwright). First time: `npx playwright install chromium` |
 
 The Electron app and the website are built from the same `index.html` and `src/renderer.ts`.
@@ -28,6 +29,8 @@ The Electron app and the website are built from the same `index.html` and `src/r
 `.github/workflows/web.yml` type-checks and runs the unit and browser tests on every push and pull request. Pushes to `main` also build the website and publish it to GitHub Pages. To turn publishing on, set **Settings > Pages > Source** to **GitHub Actions** once.
 
 ## Where data is saved
+
+The device's own copy is always the main one, so the app works offline. When signed in, it's also synced with the account (see `docs/sync-api.md`).
 
 - **Website:** the browser's localStorage.
 - **Electron app:** `game-data.json` in the app's user-data folder (`~/.config/rubiks-cube-js/` on Linux, `%APPDATA%\rubiks-cube-js\` on Windows, `~/Library/Application Support/rubiks-cube-js/` on macOS). Data saved by older versions in localStorage is picked up automatically.
@@ -41,8 +44,8 @@ The code is split so that everything except `electron/` and `platform/` can run 
 | `core/` | Pure rules and data: shared types (`types.ts`), the cube model (`cubeModel.ts`), notation, scramble, themes, algorithms, settings rules, stats, save format and migration. Unit tested (`npm test`) | Nothing (no DOM, no three.js) |
 | `view/` | three.js scene and turn animation (`CubeView`). Draws whatever cube state it is given | three.js, its own canvas |
 | `ui/` | Sidebar, status line, settings modal, algorithm panel, keyboard shortcuts | DOM |
-| `app/` | Game flow (`gameController`), settings store, and `bootstrap` which wires everything together | core, view, ui |
-| `platform/` | Storage adapters and file import/export. The only place web and Electron are allowed to differ | Browser / Electron bridge |
+| `app/` | Game flow (`gameController`), settings store, account sync (`syncEngine`), and `bootstrap` which wires everything together | core, view, ui |
+| `platform/` | Storage adapters, file import/export, the sync API client and sign-in providers. The only place web and Electron are allowed to differ | Browser / Electron bridge |
 | `electron/` | Electron main process and the (small) preload bridge | Electron, Node |
 
 `renderer.ts` is the entry point (loaded by `index.html`): it calls `bootstrap(createPlatform())`.
@@ -72,7 +75,9 @@ The code is split so that everything except `electron/` and `platform/` can run 
     - [x] Separate code into `core` / `view` / `ui` / `app` / `platform` / `electron`
     - [x] Create a storage adapter interface (`platform/types.ts`) so storage can be swapped
     - [x] Add a web build target and publish it (GitHub Pages, see below)
-    - [ ] Add individual user log in that allows different people to access their cube data on the web
+    - [x] Account sync on the app side: automatic background sync (can be turned off per device), settings per account, solves merged across devices. API contract in [`docs/sync-api.md`](docs/sync-api.md); mock server for development
+    - [ ] Add individual user log in that allows different people to access their cube data on the web (see [`docs/sign-in-checklist.md`](docs/sign-in-checklist.md))
+    - [ ] Build the real sync API to the contract
     - [ ] Data backup for an account if it's an electron application? IE story in Google Drive, Dropbox, Onedrive, Mega, etc...
 - [x] Storage for session to allow user to return and pick up where they left off when the application opens/closes
 - [ ] Allow user to modify the cube
@@ -93,5 +98,8 @@ The code is split so that everything except `electron/` and `platform/` can run 
 5. ~~Switch the build to Vite so the same renderer also builds as a website.~~
 6. ~~Convert to TypeScript and retire the old `rubiks-cube-ts` scaffold.~~
 7. ~~Publish the web build; add an Electron file-storage adapter over IPC.~~
-8. Accounts and cloud sync via an API storage adapter.
+8. Accounts and cloud sync.
+    - ~~App side: sync engine, merge rules, Account & Sync settings, API contract, mock server.~~
+    - Build the sync API ([`docs/sync-api.md`](docs/sync-api.md)).
+    - Real sign-in ([`docs/sign-in-checklist.md`](docs/sign-in-checklist.md)).
 9. ~~Other cube sizes (2x2, 4x4, ...), built on the cube model.~~

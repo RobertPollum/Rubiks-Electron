@@ -11,11 +11,18 @@ import { createSidebar } from '../ui/sidebar';
 import { createAlgorithmPanel } from '../ui/algorithmPanel';
 import { createSettingsModal } from '../ui/settingsModal';
 import { bindKeyboard } from '../ui/keyboard';
+import { createAccountPanel } from '../ui/accountPanel';
+import { createSyncEngine, type SyncEngine } from './syncEngine';
+import type { GameData } from '../core/types';
 import type { Platform } from '../platform';
 
 export async function bootstrap(platform: Platform, doc: Document = document) {
     const gameData = mergeWithDefaults(await platform.storage.load());
-    const save = () => platform.storage.save(gameData);
+    let sync: SyncEngine | null = null; // set up below, once the game exists
+    const save = () => {
+        void platform.storage.save(gameData);
+        sync?.notifyLocalChange();
+    };
 
     const settings = createSettingsStore(gameData, save);
     const status = createStatusBar(doc.getElementById('info'));
@@ -64,5 +71,28 @@ export async function bootstrap(platform: Platform, doc: Document = document) {
     game.renderHistory();
     game.resumeSavedGame();
 
-    return { game, view, settings };
+    // Account sync (only in builds with a sync API configured)
+    if (platform.sync) {
+        sync = createSyncEngine({
+            client: platform.sync.client,
+            state: platform.sync.state,
+            getLocal: () => gameData,
+            applyRemote: (data: GameData) => {
+                if (game.isBusy()) return false;
+                // Replace the contents in place: everything holds this same object.
+                for (const key of Object.keys(gameData)) delete (gameData as unknown as Record<string, unknown>)[key];
+                Object.assign(gameData, structuredClone(data));
+                void platform.storage.save(gameData);
+                view.setPalette(settings.getActiveColors());
+                game.reloadFromData();
+                if (settingsModal.isOpen()) settingsModal.render();
+                return true;
+            },
+            onStatusChange: status => accountPanel.render(status)
+        });
+    }
+    const accountPanel = createAccountPanel({ engine: sync, auth: platform.sync?.auth ?? null }, doc);
+    sync?.start();
+
+    return { game, view, settings, sync };
 }

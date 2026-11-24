@@ -15,7 +15,13 @@ export type SettingsStore = ReturnType<typeof createSettingsStore>;
  * @param gameData  The persisted data object (settings live at gameData.settings).
  * @param save      Persist gameData.
  */
-export function createSettingsStore(gameData: GameData, save: () => void) {
+export function createSettingsStore(gameData: GameData, persist: () => void) {
+    // Every settings change records when it happened, so syncing can tell
+    // which device's settings are newer.
+    const save = () => {
+        gameData.settingsUpdatedAt = new Date().toISOString();
+        persist();
+    };
     const settings = (): Settings => {
         gameData.settings = gameData.settings || ({} as Settings);
         return gameData.settings;

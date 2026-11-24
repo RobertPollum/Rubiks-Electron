@@ -3,6 +3,9 @@
 // sees these interfaces.
 
 import type { GameData } from '../core/types';
+import type { SyncClient } from './syncClient';
+import type { AuthProvider } from './auth';
+import type { SyncStateStore } from './syncState';
 
 /**
  * Somewhere the app can keep its data (browser localStorage, a file on disk
@@ -31,6 +34,15 @@ export interface Platform {
     files: FileTransfer;
     /** One-line description shown at startup (e.g. Electron versions); may be empty. */
     describe(): string;
+    /** Account sync, when this build has a sync API configured (VITE_SYNC_API_URL). */
+    sync: SyncServices | null;
+}
+
+export interface SyncServices {
+    client: SyncClient;
+    /** How to sign in, or null if no sign-in method is available yet. */
+    auth: AuthProvider | null;
+    state: SyncStateStore;
 }
 
 /** What the Electron preload script exposes on `window`. */

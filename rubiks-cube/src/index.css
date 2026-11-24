@@ -653,3 +653,18 @@ body {
   padding: 6px 10px;
   font-size: 14px;
 }
+
+.account-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #ccc;
+}

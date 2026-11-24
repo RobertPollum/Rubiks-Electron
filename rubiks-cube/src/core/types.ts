@@ -44,11 +44,19 @@ export interface SavedGame {
     start: string | null;
     scramble: string[];
     moveHistory: MoveRecord[];
+    /** When this game was last saved (ISO 8601); used to pick the newer game when syncing. */
+    updatedAt?: string;
 }
 
 export interface SolveRecord {
+    /** Unique id, so solves from several devices can be merged. Missing on solves saved before sync existed. */
+    id?: string;
+    /** When it was solved (ISO 8601). Missing on older solves. */
+    solvedAt?: string;
     moves: number;
+    /** Local time, for display. */
     timestamp: string;
+    /** Local date, for display. */
     date: string;
 }
 
@@ -83,6 +91,8 @@ export interface Settings {
 
 /** Everything the app persists. Saved data from older versions may differ (see loadSavedGame). */
 export interface GameData {
+    /** When settings last changed (ISO 8601); used to pick the newer settings when syncing. */
+    settingsUpdatedAt?: string;
     solves: SolveRecord[];
     /** Current format is SavedGame; older saves are migrated when loaded. */
     currentGame: SavedGame | Record<string, unknown>;

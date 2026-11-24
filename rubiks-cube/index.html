@@ -71,6 +71,20 @@
           <button id="settings-close">&times;</button>
         </div>
         <div id="settings-content">
+          <div class="settings-section" id="account-section">
+            <h4>Account &amp; Sync</h4>
+            <p class="settings-hint" id="account-status"></p>
+            <div class="account-row">
+              <button id="sign-in-btn" class="settings-action-btn"></button>
+              <button id="sync-now-btn" class="settings-action-btn">Sync now</button>
+              <button id="sign-out-btn" class="settings-action-btn">Sign out</button>
+            </div>
+            <label class="sync-toggle" id="sync-toggle-row">
+              <input type="checkbox" id="sync-enabled"> Sync automatically on this device
+            </label>
+            <p class="settings-hint" id="sync-status" role="status"></p>
+          </div>
+
           <div class="settings-section">
             <h4>Color Theme</h4>
             <div class="theme-grid" id="builtin-themes"></div>

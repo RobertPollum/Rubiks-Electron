@@ -9,8 +9,10 @@ export function computeStats(solves: SolveRecord[]): Stats {
     };
 }
 
-export function createSolveRecord(moveCount: number, now: Date = new Date()): SolveRecord {
+export function createSolveRecord(moveCount: number, now: Date = new Date(), random: () => number = Math.random): SolveRecord {
     return {
+        id: `${now.getTime().toString(36)}-${random().toString(36).slice(2, 10)}`,
+        solvedAt: now.toISOString(),
         moves: moveCount,
         timestamp: now.toLocaleTimeString(),
         date: now.toLocaleDateString()

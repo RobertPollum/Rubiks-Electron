@@ -36,15 +36,16 @@ export const SAVE_VERSION = 2;
 const CUBE_STATES: readonly CubeStatus[] = ['solved', 'scrambled', 'solving'];
 
 /** Plain-object form of the current game, ready to persist. */
-export function createSavedGame({ start, scramble = [], moveHistory = [], cubeState }: {
-    start: CubeState; scramble?: Move[]; moveHistory?: MoveRecord[]; cubeState: CubeStatus;
+export function createSavedGame({ start, scramble = [], moveHistory = [], cubeState, now = new Date() }: {
+    start: CubeState; scramble?: Move[]; moveHistory?: MoveRecord[]; cubeState: CubeStatus; now?: Date;
 }): SavedGame {
     return {
         version: SAVE_VERSION,
         cubeState,
         start: serializeState(start),
         scramble: scramble.map(formatMoveNotation),
-        moveHistory
+        moveHistory,
+        updatedAt: now.toISOString()
     };
 }
 

@@ -51,7 +51,8 @@ export function createGameController({ gameData, save, settings, sidebar, status
     let scramble: Move[] = [];                 // moves that produced `start`, if known
     let moveHistory: MoveRecord[] = [];        // moves since `start`
     let cubeState: CubeStatus = 'solved';
-    const solves: SolveRecord[] = gameData.solves || [];
+    // Solves live in gameData (not a local copy) so data arriving from sync is picked up.
+    const solves = (): SolveRecord[] => (gameData.solves ??= []);
     let mode: Mode = 'idle';
 
     // ---- Move queue --------------------------------------------------------
@@ -138,15 +139,14 @@ export function createGameController({ gameData, save, settings, sidebar, status
 
     function persist() {
         gameData.currentGame = createSavedGame({ start, scramble, moveHistory, cubeState });
-        gameData.solves = solves;
-        gameData.stats = computeStats(solves);
+        gameData.stats = computeStats(solves());
         sidebar.renderStats(gameData.stats);
         save();
     }
 
     function recordSolve(moveCount: number): void {
-        solves.push(createSolveRecord(moveCount));
-        sidebar.renderSolveList(solves);
+        solves().push(createSolveRecord(moveCount));
+        sidebar.renderSolveList(solves());
     }
 
     // ---- Player moves -------------------------------------------------------
@@ -294,22 +294,37 @@ export function createGameController({ gameData, save, settings, sidebar, status
     }
 
     /** Restore the saved game, if there is one worth resuming. */
-    function resumeSavedGame() {
+    /** Show the game saved in gameData.currentGame, or a fresh solved cube if there isn't one. Returns it. */
+    function loadCurrentGame() {
         const saved = loadSavedGame(gameData.currentGame);
-        if (saved && (saved.moveHistory.length > 0 || !isSolved(saved.cube))) {
-            if (cubeSizeOf(saved.cube) !== settings.getCubeSize()) settings.setCubeSize(cubeSizeOf(saved.cube));
+        if (saved) {
             showCube(saved.cube);
             start = saved.start;
             scramble = saved.scramble;
             setMoveHistory(saved.moveHistory);
             setCubeState(saved.cubeState);
-            if (saved.migrated) persist(); // upgrade old saves to the current format
-            if (cubeState !== 'solved') status.show('Resumed previous game', 'warning', { bold: false });
         } else {
             showCube(createSolvedState(settings.getCubeSize()));
-            setCubeState('solved');
+            startAttempt([], 'solved');
         }
         updateReplayButton();
+        return saved;
+    }
+
+    /** At startup: restore the saved game, if there is one. */
+    function resumeSavedGame() {
+        const saved = loadCurrentGame();
+        if (!saved) return;
+        if (cubeSizeOf(saved.cube) !== settings.getCubeSize()) settings.setCubeSize(cubeSizeOf(saved.cube));
+        if (saved.migrated) persist(); // upgrade old saves to the current format
+        if (cubeState !== 'solved') status.show('Resumed previous game', 'warning', { bold: false });
+    }
+
+    /** After gameData was replaced (e.g. by sync): show its game, solves and stats. */
+    function reloadFromData() {
+        loadCurrentGame();
+        sidebar.renderSolveList(solves());
+        sidebar.renderStats(gameData.stats);
     }
 
     return {
@@ -323,11 +338,14 @@ export function createGameController({ gameData, save, settings, sidebar, status
         runAlgorithm,
         resetCamera,
         resumeSavedGame,
+        reloadFromData,
+        /** True while anything is animating, queued, scrambling or playing back. */
+        isBusy,
         setCubeSize,
         hasProgress,
         getCubeSize: () => cubeSizeOf(cube),
         renderHistory() {
-            sidebar.renderSolveList(solves);
+            sidebar.renderSolveList(solves());
             sidebar.renderStats(gameData.stats);
         },
         /** True while scrambling or playing back; keyboard turns are ignored. */
