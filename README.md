@@ -5,8 +5,22 @@ This is my attempt at learning electron since it gives the ability to build desk
 
 # Project layout
 
-- `rubiks-cube-js/` – the working app (Electron Forge + webpack + three.js). All active development happens here.
+- `rubiks-cube-js/` – the working app (Electron Forge + Vite + three.js). All active development happens here.
 - `rubiks-cube-ts/` – an early TypeScript scaffold. It is being replaced by converting `rubiks-cube-js` to TypeScript in place (see Roadmap), not kept in parity.
+
+## Running it
+
+From `rubiks-cube-js/`:
+
+| Command | What it does |
+| --- | --- |
+| `npm start` | Run the Electron app in development (Vite dev server, DevTools open) |
+| `npm run dev:web` | Run the website locally in a browser |
+| `npm run build:web` | Build the website into `dist-web/` (static files, host anywhere) |
+| `npm run package` / `npm run make` | Package the Electron app / build installers |
+| `npm test` | Unit tests (Vitest) |
+
+The Electron app and the website are built from the same `index.html` and `src/renderer.js`.
 
 ## How `rubiks-cube-js/src` is organised
 
@@ -21,7 +35,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
 | `platform/` | Storage adapters and file import/export. The only place web and Electron are allowed to differ | Browser / Electron bridge |
 | `electron/` | Electron main process and the (small) preload bridge | Electron, Node |
 
-`renderer.js` is the entry point: it calls `bootstrap(createPlatform())`.
+`renderer.js` is the entry point (loaded by `index.html`): it calls `bootstrap(createPlatform())`.
 
 # Goals
 - [x] Get the basic electron application running
@@ -65,8 +79,8 @@ The code is split so that everything except `electron/` and `platform/` can run 
     - ~~Fix turn directions to match standard notation.~~
     - ~~Fix replay (status after replay, replay after reloading the app).~~
 3. ~~Escape imported/saved text in the UI; make the status line readable.~~
-4. Shrink the settings modal (move fixed markup into `<template>`s in `index.html`).
-5. Switch the build to Vite (Electron Forge has a Vite plugin) so the same renderer also builds as a website.
+4. ~~Shrink the settings modal (move fixed markup into `<template>`s in `index.html`).~~
+5. ~~Switch the build to Vite so the same renderer also builds as a website.~~
 6. Convert `rubiks-cube-js` to TypeScript, starting with `core/`; retire `rubiks-cube-ts`.
 7. Publish the web build; add an Electron file-storage adapter over IPC.
 8. Accounts and cloud sync via an API storage adapter.

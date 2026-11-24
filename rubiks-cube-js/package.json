@@ -2,16 +2,19 @@
   "name": "rubiks-cube-js",
   "productName": "rubiks-cube-js",
   "version": "1.0.0",
-  "description": "My Electron application description",
-  "main": ".webpack/main",
+  "description": "Rubik's cube simulator that runs as an Electron app or a website",
+  "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\"",
+    "dev:web": "vite --config vite.web.config.mjs",
+    "build:web": "vite build --config vite.web.config.mjs",
+    "preview:web": "vite preview --config vite.web.config.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "echo \"No linting configured\""
   },
   "keywords": [
     "electron",
@@ -34,13 +37,10 @@
     "@electron-forge/maker-zip": "^7.8.3",
     "@electron-forge/plugin-auto-unpack-natives": "^7.8.3",
     "@electron-forge/plugin-fuses": "^7.8.3",
-    "@electron-forge/plugin-webpack": "^7.8.3",
+    "@electron-forge/plugin-vite": "^7.8.3",
     "@electron/fuses": "^1.8.0",
-    "@vercel/webpack-asset-relocator-loader": "^1.7.3",
-    "css-loader": "^6.11.0",
     "electron": "38.0.0",
-    "node-loader": "^2.1.0",
-    "style-loader": "^3.3.4",
+    "vite": "^5.4.19",
     "vitest": "^3.2.4"
   },
   "dependencies": {

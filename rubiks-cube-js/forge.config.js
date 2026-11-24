@@ -30,25 +30,17 @@ module.exports = {
       config: {},
     },
     {
-      name: '@electron-forge/plugin-webpack',
+      name: '@electron-forge/plugin-vite',
       config: {
-        port: 3005,
-        loggerPort: 9005,
-        mainConfig: './webpack.main.config.js',
-        renderer: {
-          config: './webpack.renderer.config.js',
-          entryPoints: [
-            {
-              html: './src/index.html',
-              js: './src/renderer.js',
-              name: 'main_window',
-              preload: {
-                js: './src/electron/preload.js',
-              },
-            },
-          ],
-        },
-
+        // Main process and preload script
+        build: [
+          { entry: 'src/electron/main.js', config: 'vite.main.config.mjs', target: 'main' },
+          { entry: 'src/electron/preload.js', config: 'vite.preload.config.mjs', target: 'preload' },
+        ],
+        // The app itself (index.html -> src/renderer.js); same code as the web build
+        renderer: [
+          { name: 'main_window', config: 'vite.renderer.config.mjs' },
+        ],
       },
     },
     // Fuses are used to enable/disable various Electron functionality
