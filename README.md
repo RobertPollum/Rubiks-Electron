@@ -5,12 +5,11 @@ This is my attempt at learning electron since it gives the ability to build desk
 
 # Project layout
 
-- `rubiks-cube-js/` – the working app (Electron Forge + Vite + three.js). All active development happens here.
-- `rubiks-cube-ts/` – an early TypeScript scaffold. It is being replaced by converting `rubiks-cube-js` to TypeScript in place (see Roadmap), not kept in parity.
+- `rubiks-cube/` – the app: TypeScript, three.js, Vite, and Electron Forge. It builds as both an Electron desktop app and a website from the same code.
 
 ## Running it
 
-From `rubiks-cube-js/`:
+From `rubiks-cube/`:
 
 | Command | What it does |
 | --- | --- |
@@ -19,24 +18,25 @@ From `rubiks-cube-js/`:
 | `npm run build:web` | Build the website into `dist-web/` (static files, host anywhere) |
 | `npm run package` / `npm run make` | Package the Electron app / build installers |
 | `npm test` | Unit tests (Vitest) |
+| `npm run typecheck` | Type-check everything (TypeScript) |
 | `npm run test:e2e` | Browser tests of the web build (Playwright). First time: `npx playwright install chromium` |
 
-The Electron app and the website are built from the same `index.html` and `src/renderer.js`.
+The Electron app and the website are built from the same `index.html` and `src/renderer.ts`.
 
-## How `rubiks-cube-js/src` is organised
+## How `rubiks-cube/src` is organised
 
 The code is split so that everything except `electron/` and `platform/` can run as a plain web page.
 
 | Folder | What lives there | May use |
 | --- | --- | --- |
-| `core/` | Pure rules and data: the cube model (`cubeModel.js`), notation, scramble, themes, algorithms, settings rules, stats, save format and migration. Unit tested (`npm test`) | Nothing (no DOM, no three.js) |
+| `core/` | Pure rules and data: shared types (`types.ts`), the cube model (`cubeModel.ts`), notation, scramble, themes, algorithms, settings rules, stats, save format and migration. Unit tested (`npm test`) | Nothing (no DOM, no three.js) |
 | `view/` | three.js scene and turn animation (`CubeView`). Draws whatever cube state it is given | three.js, its own canvas |
 | `ui/` | Sidebar, status line, settings modal, algorithm panel, keyboard shortcuts | DOM |
 | `app/` | Game flow (`gameController`), settings store, and `bootstrap` which wires everything together | core, view, ui |
 | `platform/` | Storage adapters and file import/export. The only place web and Electron are allowed to differ | Browser / Electron bridge |
 | `electron/` | Electron main process and the (small) preload bridge | Electron, Node |
 
-`renderer.js` is the entry point (loaded by `index.html`): it calls `bootstrap(createPlatform())`.
+`renderer.ts` is the entry point (loaded by `index.html`): it calls `bootstrap(createPlatform())`.
 
 # Goals
 - [x] Get the basic electron application running
@@ -61,7 +61,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
 - [ ] Migrate node/interaction code so that it can run as a web application
     - [x] Move the game out of the Electron preload script into the renderer
     - [x] Separate code into `core` / `view` / `ui` / `app` / `platform` / `electron`
-    - [x] Create a storage adapter interface (`platform/storageAdapter.js`) so storage can be swapped
+    - [x] Create a storage adapter interface (`platform/types.ts`) so storage can be swapped
     - [ ] Add a web build target and publish it (e.g. GitHub Pages)
     - [ ] Add individual user log in that allows different people to access their cube data on the web
     - [ ] Data backup for an account if it's an electron application? IE story in Google Drive, Dropbox, Onedrive, Mega, etc...
@@ -82,7 +82,7 @@ The code is split so that everything except `electron/` and `platform/` can run 
 3. ~~Escape imported/saved text in the UI; make the status line readable.~~
 4. ~~Shrink the settings modal (move fixed markup into `<template>`s in `index.html`).~~
 5. ~~Switch the build to Vite so the same renderer also builds as a website.~~
-6. Convert `rubiks-cube-js` to TypeScript, starting with `core/`; retire `rubiks-cube-ts`.
+6. ~~Convert to TypeScript and retire the old `rubiks-cube-ts` scaffold.~~
 7. Publish the web build; add an Electron file-storage adapter over IPC.
 8. Accounts and cloud sync via an API storage adapter.
 9. Other cube sizes (2x2, 4x4, ...), built on the cube model.
